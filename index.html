@@ -108,6 +108,103 @@ textarea {
   resize: vertical;
   font-family: sans-serif;
 }
+/* Модальні вікна для входу та реєстрації */
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+}
+
+.modal-content {
+  background: #fff;
+  padding: 20px;
+  border-radius: 8px;
+  width: 300px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.modal-content h2 {
+  margin-top: 0;
+}
+
+.modal-content input[type="email"],
+.modal-content input[type="password"],
+.modal-content input[type="text"] {
+  width: 100%;
+  padding: 8px;
+  margin: 5px 0;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+
+.modal-content button {
+  width: 100%;
+  padding: 10px;
+  margin-top: 10px;
+  border: none;
+  border-radius: 4px;
+  background: #1976d2;
+  color: #fff;
+  cursor: pointer;
+}
+
+.modal-content button:hover {
+  background: #155a9c;
+}
+
+/* Аватар користувача у навігації */
+.avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  margin-right: 10px;
+  vertical-align: middle;
+}
+
+/* Аватарки в картках і коментарях */
+.card-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  margin-right: 5px;
+  vertical-align: middle;
+}
+
+/* Секція оцінок (лайки/дизлайки) */
+.rating {
+  margin: 10px 0;
+}
+.rating button {
+  margin-right: 10px;
+  border: none;
+  background: #eee;
+  padding: 5px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+.rating button.active {
+  background: #cce5ff;
+}
+.rating button:hover {
+  background: #ddd;
+}
+
+/* Лінія з автором у картці відео */
+.author-line {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
 </style>
 </head>
 <body>
@@ -118,10 +215,34 @@ textarea {
     <a href="#" id="myChannelLink" class="hidden">Мій канал</a>
   </div>
   <div class="right">
+    <img id="userAvatar" class="avatar hidden" src="" alt="Avatar">
     <span id="userDisplay"></span>
     <button id="authButton" class="button">Увійти</button>
   </div>
 </nav>
+
+  <!-- Модальне вікно для входу -->
+  <div id="loginModal" class="modal hidden">
+    <div class="modal-content">
+      <h2>Увійти</h2>
+      <input type="email" id="loginEmail" placeholder="Електронна пошта" required>
+      <input type="password" id="loginPassword" placeholder="Пароль" required>
+      <button id="loginSubmit" class="button">Увійти</button>
+      <p style="margin-top:10px;">Немає акаунта? <a href="#" id="showRegister">Реєстрація</a></p>
+    </div>
+  </div>
+  <!-- Модальне вікно для реєстрації -->
+  <div id="registerModal" class="modal hidden">
+    <div class="modal-content">
+      <h2>Реєстрація</h2>
+      <input type="text" id="registerName" placeholder="Ім'я (необов'язково)">
+      <input type="email" id="registerEmail" placeholder="Електронна пошта" required>
+      <input type="password" id="registerPassword" placeholder="Пароль" required>
+      <label style="font-size:12px; margin-top:5px;">Аватар: <input type="file" id="registerAvatar" accept="image/*"></label>
+      <button id="registerSubmit" class="button">Зареєструватися</button>
+      <p style="margin-top:10px;">Вже маєте акаунт? <a href="#" id="showLogin">Увійти</a></p>
+    </div>
+  </div>
 <div id="content"></div>
 
 <script type="module">
@@ -131,7 +252,7 @@ textarea {
  * тут вказано коректні параметри для проєкту bone-tube. Версія Firebase SDK – 12.1.0.
  */
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js';
-import { getAuth, onAuthStateChanged, signOut, createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js';
+import { getAuth, onAuthStateChanged, signOut, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js';
 import {
   getFirestore,
   collection,
@@ -146,7 +267,9 @@ import {
   orderBy,
   serverTimestamp,
   limit,
-  increment
+  increment,
+  arrayUnion,
+  arrayRemove
 } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-storage.js';
 import { getAnalytics } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-analytics.js';
@@ -176,6 +299,106 @@ const authButton = document.getElementById('authButton');
 const userDisplay = document.getElementById('userDisplay');
 const uploadLink = document.getElementById('uploadLink');
 const myChannelLink = document.getElementById('myChannelLink');
+
+// Елементи для модальних вікон та аватару
+const userAvatarImg = document.getElementById('userAvatar');
+const loginModal = document.getElementById('loginModal');
+const registerModal = document.getElementById('registerModal');
+const loginSubmit = document.getElementById('loginSubmit');
+const registerSubmit = document.getElementById('registerSubmit');
+const showRegisterLink = document.getElementById('showRegister');
+const showLoginLink = document.getElementById('showLogin');
+
+// Функції для керування відображенням модалей
+function showLoginModal() {
+  loginModal.classList.remove('hidden');
+  registerModal.classList.add('hidden');
+}
+function showRegisterModal() {
+  registerModal.classList.remove('hidden');
+  loginModal.classList.add('hidden');
+}
+function hideModals() {
+  loginModal.classList.add('hidden');
+  registerModal.classList.add('hidden');
+}
+
+// Обробники для входу та реєстрації
+async function loginUser() {
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  if (!email || !password) {
+    alert('Введіть електронну пошту і пароль');
+    return;
+  }
+  try {
+    await signInWithEmailAndPassword(auth, email, password);
+    hideModals();
+  } catch (err) {
+    alert('Помилка входу: ' + err.message);
+  }
+}
+
+async function registerUser() {
+  const email = document.getElementById('registerEmail').value.trim();
+  const password = document.getElementById('registerPassword').value;
+  const name = document.getElementById('registerName').value.trim();
+  const avatarFile = document.getElementById('registerAvatar').files[0];
+  if (!email || !password) {
+    alert('Введіть електронну пошту і пароль');
+    return;
+  }
+  try {
+    const userCred = await createUserWithEmailAndPassword(auth, email, password);
+    if (name) {
+      await updateProfile(userCred.user, { displayName: name });
+    }
+    let avatarURL = '';
+    if (avatarFile) {
+      const avatarPath = `avatars/${userCred.user.uid}/${avatarFile.name}`;
+      const avatarRef = ref(storage, avatarPath);
+      await uploadBytes(avatarRef, avatarFile);
+      avatarURL = await getDownloadURL(avatarRef);
+      await updateProfile(userCred.user, { photoURL: avatarURL });
+    }
+    await setDoc(doc(db, 'users', userCred.user.uid), {
+      displayName: name || email,
+      photoURL: avatarURL,
+      email: email,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+    hideModals();
+  } catch (err) {
+    alert('Помилка реєстрації: ' + err.message);
+  }
+}
+
+// Прив'язуємо обробники подій до елементів модалей
+if (loginSubmit) {
+  loginSubmit.addEventListener('click', (e) => {
+    e.preventDefault();
+    loginUser();
+  });
+}
+if (registerSubmit) {
+  registerSubmit.addEventListener('click', (e) => {
+    e.preventDefault();
+    registerUser();
+  });
+}
+if (showRegisterLink) {
+  showRegisterLink.addEventListener('click', (e) => {
+    e.preventDefault();
+    showRegisterModal();
+  });
+}
+if (showLoginLink) {
+  showLoginLink.addEventListener('click', (e) => {
+    e.preventDefault();
+    showLoginModal();
+  });
+}
 
 function signIn() {
   // Запитуємо електронну пошту та пароль у користувача. Якщо користувач
@@ -212,7 +435,8 @@ authButton.addEventListener('click', () => {
   if (currentUser) {
     signOutUser();
   } else {
-    signIn();
+    // Відкриваємо модальне вікно для входу замість prompt
+    showLoginModal();
   }
 });
 
@@ -231,6 +455,14 @@ onAuthStateChanged(auth, async (user) => {
     authButton.textContent = 'Вийти';
     uploadLink.classList.remove('hidden');
     myChannelLink.classList.remove('hidden');
+    // Показуємо аватар у навігації, якщо він є
+    if (user.photoURL) {
+      userAvatarImg.src = user.photoURL;
+      userAvatarImg.classList.remove('hidden');
+    } else {
+      userAvatarImg.src = '';
+      userAvatarImg.classList.add('hidden');
+    }
     // Оновлення даних користувача у Firestore
     const userRef = doc(db, 'users', user.uid);
     await setDoc(
@@ -242,11 +474,17 @@ onAuthStateChanged(auth, async (user) => {
       },
       { merge: true }
     );
+    // Закриваємо модалі після успішного входу
+    hideModals();
   } else {
     userDisplay.textContent = '';
     authButton.textContent = 'Увійти';
     uploadLink.classList.add('hidden');
     myChannelLink.classList.add('hidden');
+    userAvatarImg.classList.add('hidden');
+    userAvatarImg.src = '';
+    // Закриваємо всі модалі при виході
+    hideModals();
   }
   // Щойно статус автентифікації змінюється – виконуємо маршрутизацію
   route();
@@ -305,7 +543,9 @@ function renderVideoCard(id, vid) {
     <img src="${vid.thumbURL}" alt="${vid.title}">
     <div class="info">
       <h3>${vid.title}</h3>
-      <p>Автор: <a href="#channel/${vid.ownerUid}">${vid.ownerName || 'Користувач'}</a></p>
+      <div class="author-line">
+        ${vid.ownerAvatar ? ('<img src="' + vid.ownerAvatar + '" class="card-avatar">') : ''}<a href="#channel/${vid.ownerUid}">${vid.ownerName || 'Користувач'}</a>
+      </div>
       <p>${vid.views || 0} переглядів</p>
     </div>
   `;
@@ -413,11 +653,14 @@ async function uploadVideo(file, canvas) {
       description: desc,
       ownerUid: currentUser.uid,
       ownerName: currentUser.displayName || currentUser.email,
+      ownerAvatar: currentUser.photoURL || '',
       videoPath,
       videoURL,
       thumbPath,
       thumbURL,
       views: 0,
+      likes: [],
+      dislikes: [],
       createdAt: serverTimestamp()
     });
     // Переходимо на сторінку відео
@@ -451,9 +694,16 @@ async function showVideo(id) {
           <source src="${vid.videoURL}" type="video/mp4">
           <source src="${vid.videoURL}" type="video/webm">
         </video>
-        <p>Автор: <a href="#channel/${vid.ownerUid}">${vid.ownerName || 'Користувач'}</a></p>
+        <p>
+          ${vid.ownerAvatar ? ('<img src="' + vid.ownerAvatar + '" class="card-avatar">') : ''}
+          Автор: <a href="#channel/${vid.ownerUid}">${vid.ownerName || 'Користувач'}</a>
+        </p>
         <p>${(vid.views || 0) + 1} переглядів</p>
         <p>${vid.description || ''}</p>
+        <div class="rating">
+          <button id="likeBtn">👍 <span id="likeCount">${vid.likes ? vid.likes.length : 0}</span></button>
+          <button id="dislikeBtn">👎 <span id="dislikeCount">${vid.dislikes ? vid.dislikes.length : 0}</span></button>
+        </div>
         <div id="commentsSection">
           <h3>Коментарі</h3>
           <div id="commentsList"></div>
@@ -461,6 +711,25 @@ async function showVideo(id) {
         </div>
       </div>
     `;
+    // Після вставки HTML додаємо обробники для оцінок
+    const likeBtn = document.getElementById('likeBtn');
+    const dislikeBtn = document.getElementById('dislikeBtn');
+    if (likeBtn) {
+      if (currentUser && vid.likes && vid.likes.includes(currentUser.uid)) {
+        likeBtn.classList.add('active');
+      }
+      likeBtn.addEventListener('click', () => {
+        likeVideo(id, vid);
+      });
+    }
+    if (dislikeBtn) {
+      if (currentUser && vid.dislikes && vid.dislikes.includes(currentUser.uid)) {
+        dislikeBtn.classList.add('active');
+      }
+      dislikeBtn.addEventListener('click', () => {
+        dislikeVideo(id, vid);
+      });
+    }
     // Завантажуємо коментарі
     loadComments(id);
     // Показуємо форму коментаря тільки для авторизованих
@@ -495,7 +764,10 @@ async function loadComments(videoId) {
       div.className = 'comment';
       const dateStr = c.createdAt?.toDate().toLocaleString() || '';
       div.innerHTML = `
-        <div class="meta">${c.userName || 'Користувач'} - ${dateStr}</div>
+        <div class="meta">
+          ${c.avatarURL ? ('<img src="' + c.avatarURL + '" class="card-avatar">') : ''}
+          <strong>${c.userName || 'Користувач'}</strong> - ${dateStr}
+        </div>
         <div class="content">${escapeHtml(c.content)}</div>
       `;
       commentsList.appendChild(div);
@@ -525,6 +797,7 @@ function renderCommentForm(videoId) {
       await addDoc(collection(db, 'videos', videoId, 'comments'), {
         userUid: currentUser.uid,
         userName: currentUser.displayName || currentUser.email,
+        avatarURL: currentUser.photoURL || '',
         content: text,
         createdAt: serverTimestamp()
       });
@@ -548,6 +821,7 @@ async function showChannel(uid) {
     const displayName = userData?.displayName || 'Користувач';
     content.innerHTML = `
       <h2>Канал: ${displayName}</h2>
+      ${userData && userData.photoURL ? ('<img src="' + userData.photoURL + '" class="avatar">') : ''}
       <div id="channelVideos"></div>
     `;
     const vidsContainer = document.getElementById('channelVideos');
@@ -571,6 +845,63 @@ async function showChannel(uid) {
   } catch (err) {
     content.innerHTML = '<p>Помилка завантаження каналу.</p>';
   }
+}
+
+/**
+ * Додає або видаляє лайк для відео. Якщо користувач уже поставив лайк, то лайк буде знято.
+ * Якщо користувач поставив дизлайк, він буде знятий і доданий лайк.
+ * Після оновлення перезавантажує сторінку відео.
+ * @param {string} id ID відео
+ * @param {object} vid Дані відео
+ */
+async function likeVideo(id, vid) {
+  if (!currentUser) {
+    alert('Увійдіть, щоб поставити оцінку');
+    return;
+  }
+  const docRef = doc(db, 'videos', id);
+  const uid = currentUser.uid;
+  const liked = Array.isArray(vid.likes) && vid.likes.includes(uid);
+  const disliked = Array.isArray(vid.dislikes) && vid.dislikes.includes(uid);
+  const updates = {};
+  if (liked) {
+    updates.likes = arrayRemove(uid);
+  } else {
+    updates.likes = arrayUnion(uid);
+    if (disliked) {
+      updates.dislikes = arrayRemove(uid);
+    }
+  }
+  await updateDoc(docRef, updates);
+  // Перезавантажуємо сторінку відео, щоб оновити стан
+  showVideo(id);
+}
+
+/**
+ * Додає або видаляє дизлайк для відео. Аналогічно до likeVideo.
+ * @param {string} id ID відео
+ * @param {object} vid Дані відео
+ */
+async function dislikeVideo(id, vid) {
+  if (!currentUser) {
+    alert('Увійдіть, щоб поставити оцінку');
+    return;
+  }
+  const docRef = doc(db, 'videos', id);
+  const uid = currentUser.uid;
+  const liked = Array.isArray(vid.likes) && vid.likes.includes(uid);
+  const disliked = Array.isArray(vid.dislikes) && vid.dislikes.includes(uid);
+  const updates = {};
+  if (disliked) {
+    updates.dislikes = arrayRemove(uid);
+  } else {
+    updates.dislikes = arrayUnion(uid);
+    if (liked) {
+      updates.likes = arrayRemove(uid);
+    }
+  }
+  await updateDoc(docRef, updates);
+  showVideo(id);
 }
 
 /**
