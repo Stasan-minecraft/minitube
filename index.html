@@ -131,7 +131,7 @@ textarea {
  * тут вказано коректні параметри для проєкту bone-tube. Версія Firebase SDK – 12.1.0.
  */
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js';
-import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js';
+import { getAuth, onAuthStateChanged, signOut, createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js';
 import {
   getFirestore,
   collection,
@@ -178,9 +178,27 @@ const uploadLink = document.getElementById('uploadLink');
 const myChannelLink = document.getElementById('myChannelLink');
 
 function signIn() {
-  const provider = new GoogleAuthProvider();
-  signInWithPopup(auth, provider).catch((error) => {
-    alert('Помилка входу: ' + error.message);
+  // Запитуємо електронну пошту та пароль у користувача. Якщо користувач
+  // не введе електронну пошту або пароль – припиняємо процес.
+  const email = prompt('Введіть вашу електронну пошту:');
+  if (!email) {
+    return;
+  }
+  const password = prompt('Введіть пароль:');
+  if (!password) {
+    return;
+  }
+  // Спочатку намагаємося увійти з введеними обліковими даними. Якщо користувача
+  // не знайдено, автоматично створюємо новий акаунт з цими даними. Це спрощує
+  // процес реєстрації, оскільки не потребує окремого потоку для створення користувача.
+  signInWithEmailAndPassword(auth, email, password).catch((error) => {
+    if (error.code === 'auth/user-not-found') {
+      createUserWithEmailAndPassword(auth, email, password).catch((err) => {
+        alert('Помилка реєстрації: ' + err.message);
+      });
+    } else {
+      alert('Помилка входу: ' + error.message);
+    }
   });
 }
 
