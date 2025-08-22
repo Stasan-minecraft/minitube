@@ -27,6 +27,9 @@
     .icon-btn.active{border-color:#43dba7;background:#0f2d2a}
     .icon-btn.danger.active{border-color:#ff6d7c;background:#2d0f11}
     input,textarea{background:#0f0f1f;border:1px solid #2a2a50;border-radius:12px;padding:10px;color:#e9ebff}
+    .progress{height:8px;border-radius:8px;background:#13132a;border:1px solid #2a2a50;overflow:hidden}
+    .bar{height:100%;background:linear-gradient(90deg,#5965ff,#43dba7)}
+    .line-clamp-2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
   </style>
 </head>
 <body class="min-h-full">
@@ -80,6 +83,25 @@
     </div>
   </div>
 
+  <!-- Profile Modal -->
+  <div id="profile-modal" class="modal hidden">
+    <div class="panel card p-4">
+      <div class="flex justify-between items-center">
+        <div class="text-lg font-semibold">Профіль</div>
+        <button id="btn-prof-close" class="icon-btn">✖</button>
+      </div>
+      <div class="mt-3 grid gap-3">
+        <input id="prof-name" type="text" placeholder="Нік"/>
+        <div>
+          <label class="text-sm muted">Новий аватар</label>
+          <input id="prof-avatar" type="file" accept="image/*"/>
+        </div>
+        <button id="btn-prof-save" class="btn">Зберегти</button>
+        <div id="prof-msg" class="text-sm"></div>
+      </div>
+    </div>
+  </div>
+
   <main class="pt-16">
     <div id="app"></div>
   </main>
@@ -101,7 +123,7 @@
       query, orderBy, limit, where, serverTimestamp, increment, arrayUnion, arrayRemove
     } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
     import {
-      getStorage, ref as sRef, uploadBytesResumable, getDownloadURL
+      getStorage, ref as sRef, uploadBytesResumable, getDownloadURL, deleteObject
     } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-storage.js";
 
     // ===== Your config (bone-tube) =====
@@ -109,7 +131,7 @@
       apiKey: "AIzaSyBN_k0dKVxWutHBIukRlHOv764PV2G0uCw",
       authDomain: "bone-tube.firebaseapp.com",
       projectId: "bone-tube",
-      storageBucket: "bone-tube.firebasestorage.app",
+      storageBucket: "bone-tube.appspot.com", // ВАЖЛИВО: appspot.com, не firebasestorage.app
       messagingSenderId: "476854769966",
       appId: "1:476854769966:web:e4e4121ac13c096457c2bf",
       measurementId: "G-KJWMF7FFJK"
@@ -137,6 +159,8 @@
     const loginPane = $("#login-pane");
     const signupPane = $("#signup-pane");
 
+    const profModal = $("#profile-modal");
+
     function show(el){ el.classList.remove("hidden"); }
     function hide(el){ el.classList.add("hidden"); }
     function toast(msg){
@@ -145,7 +169,7 @@
       el.textContent=msg; document.body.appendChild(el); setTimeout(()=>el.remove(), 3000);
     }
     function short(n){ n=+n||0; if(n>=1e6)return (n/1e6).toFixed(1)+"M"; if(n>=1e3)return (n/1e3).toFixed(1)+"K"; return ""+n; }
-    function esc(s){ return (s||"").replace(/[&<>\"']/g,(c)=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
+    function esc(s){ return (s||"").replace(/[&<>"']/g,(c)=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
 
     // ===== Router =====
     const routes = {
@@ -243,6 +267,47 @@
     $("#btn-go-home").onclick = ()=>location.hash="#home";
     $("#btn-go-upload").onclick = ()=>location.hash="#upload";
     $("#nav-channel").onclick = (e)=>{ e.preventDefault(); if(!auth.currentUser){ openLogin(); return; } location.hash=`#channel/${auth.currentUser.uid}`; };
+    $("#nav-avatar").onclick = ()=> openProfile();
+
+    // ===== Profile =====
+    function openProfile(){
+      if(!auth.currentUser){ openLogin(); return; }
+      $("#prof-name").value = auth.currentUser.displayName || (auth.currentUser.email?.split("@")[0]) || "";
+      $("#prof-msg").textContent = "";
+      show(profModal);
+    }
+    $("#btn-prof-close").onclick = ()=> hide(profModal);
+    $("#btn-prof-save").onclick = async ()=>{
+      if(!auth.currentUser) return;
+      $("#prof-msg").textContent = "Збереження…";
+      try{
+        const name = $("#prof-name").value.trim();
+        if(name) await updateProfile(auth.currentUser,{displayName:name});
+        const f = $("#prof-avatar").files?.[0];
+        let url = auth.currentUser.photoURL || "";
+        if(f){
+          const ref = sRef(storage, `avatars/${auth.currentUser.uid}.jpg`);
+          await uploadBytesResumable(ref, f);
+          url = await getDownloadURL(ref);
+          await updateProfile(auth.currentUser,{photoURL:url});
+        }
+        await setDoc(doc(db,"users",auth.currentUser.uid),{
+          displayName: name || auth.currentUser.displayName || (auth.currentUser.email?.split("@")[0]),
+          photoURL: url
+        }, {merge:true});
+        $("#prof-msg").textContent = "Готово";
+        setTimeout(()=>hide(profModal), 700);
+        updateNav();
+      }catch(e){ $("#prof-msg").textContent = e.code||"Помилка"; }
+    };
+
+    function updateNav(){
+      const u = auth.currentUser;
+      if(u){
+        nav.username.textContent = u.displayName || (u.email?.split("@")[0]) || "User";
+        if(u.photoURL){ nav.avatar.src = u.photoURL; show(nav.avatar);} else { hide(nav.avatar); }
+      }
+    }
 
     // ===== Search =====
     $("#searchForm").addEventListener("submit",(e)=>{
@@ -293,7 +358,10 @@
             <textarea id="in-desc" rows="6" class="w-full" maxlength="5000"></textarea>
             <label class="block text-sm mt-3 mb-1">Відео (MP4/WebM, ≤ 300MB)</label>
             <input id="in-file" type="file" accept="video/mp4,video/webm" class="w-full"/>
-            <div class="mt-4 flex items-center gap-3">
+            <div class="mt-4">
+              <div class="progress"><div id="bar" class="bar" style="width:0%"></div></div>
+            </div>
+            <div class="mt-3 flex items-center gap-3">
               <button id="btn-upload" class="btn">⬆️ Завантажити</button>
               <div id="up-status" class="muted text-sm"></div>
             </div>
@@ -318,6 +386,7 @@
         const title = $("#in-title").value.trim();
         const desc  = $("#in-desc").value.trim();
         const statusEl = $("#up-status");
+        const bar = $("#bar");
         if(!user){ openLogin(); return; }
         if(!f || !title){ toast("Заповніть назву та виберіть файл"); return; }
         if(f.size > 300*1024*1024){ toast("Файл перевищує 300MB"); return; }
@@ -331,7 +400,9 @@
           const vRef = sRef(storage, vPath);
           const vTask = uploadBytesResumable(vRef, f);
           vTask.on("state_changed",(snap)=>{
-            statusEl.textContent = `Завантаження відео… ${Math.round((snap.bytesTransferred/snap.totalBytes)*100)}%`;
+            const p = Math.round((snap.bytesTransferred/snap.totalBytes)*100);
+            bar.style.width = p+"%";
+            statusEl.textContent = `Завантаження відео… ${p}%`;
           });
           await vTask; const videoURL = await getDownloadURL(vRef);
 
@@ -347,12 +418,13 @@
             ownerName: user.displayName || (user.email?.split("@")[0]) || "User",
             ownerAvatar: user.photoURL || "",
             title, description: desc, videoURL, thumbURL,
+            videoPath: vPath, thumbPath: tPath,
             createdAt: serverTimestamp(), views: 0,
             likedBy: [], dislikedBy: []
           });
           toast("Готово!");
           location.hash = `#watch/${vDoc.id}`;
-        }catch(e){ console.error(e); toast("Помилка завантаження"); }
+        }catch(e){ console.error(e); statusEl.textContent = e.code||"Помилка"; toast("Помилка завантаження"); }
         finally{ $("#btn-upload").disabled = false; }
       });
     }
@@ -363,6 +435,8 @@
       const v = d.data(); v.id = d.id;
       // increment views (best-effort)
       try{ await updateDoc(doc(db,"videos", id), { views: increment(1) }); }catch{}
+
+      const isOwner = auth.currentUser?.uid === v.ownerUid;
 
       appRoot.innerHTML = `
         <div class="max-w-[1100px] mx-auto p-4 grid lg:grid-cols-[1fr_360px] gap-6">
@@ -375,6 +449,7 @@
                 ${v.ownerAvatar?`<img class="avatar" src="${v.ownerAvatar}">`:``}
                 від ${esc(v.ownerName||"Канал")}
               </a>
+              ${isOwner?`<button id="btn-del" class="btn">🗑 Видалити</button>`:""}
             </div>
             <div class="mt-3 flex items-center gap-2">
               <button id="likeBtn" class="icon-btn">👍</button>
@@ -399,6 +474,19 @@
           </aside>
         </div>`;
 
+      // Delete (owner)
+      if(isOwner){
+        $("#btn-del").onclick = async ()=>{
+          if(!confirm("Видалити відео?")) return;
+          try{
+            await deleteObject(sRef(storage, v.videoPath));
+            await deleteObject(sRef(storage, v.thumbPath));
+          }catch{}
+          await deleteDoc(doc(db,"videos", id));
+          toast("Видалено"); location.hash="#home";
+        };
+      }
+
       // Like / Dislike behaviour
       const likeBtn = $("#likeBtn"), dislikeBtn = $("#dislikeBtn");
       function updateLikeUI(){
@@ -412,7 +500,6 @@
         if(!auth.currentUser){ openLogin(); return; }
         const uid = auth.currentUser.uid;
         const ref = doc(db,"videos", id);
-        // Toggle like
         if(v.likedBy?.includes(uid)){
           await updateDoc(ref, { likedBy: arrayRemove(uid) });
           v.likedBy = v.likedBy.filter(x=>x!==uid);
@@ -465,7 +552,7 @@
           await loadComments();
         };
       }else{
-        cf.innerHTML = `<div class="muted">Щоб коментувати, <button class="link" id="c-login">увійдіть</button>.</div>`;
+        cf.innerHTML = `<div class='muted'>Щоб коментувати, <button class="link" id="c-login">увійдіть</button>.</div>`;
         $("#c-login").onclick = ()=>openLogin();
       }
       async function loadComments(){
@@ -508,9 +595,15 @@
         if(!auth.currentUser){ openLogin(); return; }
         uid = auth.currentUser.uid;
       }
+      const isMe = auth.currentUser?.uid===uid;
       appRoot.innerHTML = `<div class='max-w-[1100px] mx-auto p-4'>
-        <h2 class='text-xl font-bold mb-3'>Канал</h2>
+        <div class='flex items-center gap-3 mb-3'>
+          ${auth.currentUser?.photoURL && isMe?`<img class='big-avatar' src='${auth.currentUser.photoURL}'>`:''}
+          <h2 class='text-xl font-bold'>Канал</h2>
+          ${isMe?`<button id='btn-prof' class='btn ml-auto'>Профіль</button>`:''}
+        </div>
         <div id='grid' class='grid gap-4 sm:grid-cols-2 lg:grid-cols-3'></div></div>`;
+      if(isMe){ $("#btn-prof").onclick = ()=> openProfile(); }
       const grid = $("#grid");
       const snap = await getDocs(query(collection(db,"videos"), where("ownerUid","==",uid), orderBy("createdAt","desc"), limit(60)));
       if(snap.empty){ grid.innerHTML = `<div class='muted'>На каналі ще немає відео</div>`; return; }
