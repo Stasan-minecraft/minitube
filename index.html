@@ -127,11 +127,11 @@ textarea {
 <script type="module">
 /*
  * Основний клієнтський скрипт MiniTube. Все знаходиться в одному файлі для
- * спрощення розгортання. Ви повинні замінити значення у firebaseConfig
- * на власні параметри, отримані з консолі Firebase (App settings).
+ * спрощення розгортання. Після отримання конфігурації Firebase від користувача,
+ * тут вказано коректні параметри для проєкту bone-tube. Версія Firebase SDK – 12.1.0.
  */
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js';
-import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js';
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js';
+import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js';
 import {
   getFirestore,
   collection,
@@ -147,19 +147,25 @@ import {
   serverTimestamp,
   limit,
   increment
-} from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
-import { getStorage, ref, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js';
+} from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js';
+import { getStorage, ref, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-storage.js';
+import { getAnalytics } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-analytics.js';
 
-// TODO: Замініть ці параметри на власні з Firebase Console → Project settings → General → Your apps
+// Конфігурація Firebase, надана користувачем для проєкту bone-tube.
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_AUTH_DOMAIN",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_STORAGE_BUCKET",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyBN_k0dKVxWutHBIukRlHOv764PV2G0uCw",
+  authDomain: "bone-tube.firebaseapp.com",
+  projectId: "bone-tube",
+  storageBucket: "bone-tube.firebasestorage.app",
+  messagingSenderId: "476854769966",
+  appId: "1:476854769966:web:e4e4121ac13c096457c2bf",
+  measurementId: "G-KJWMF7FFJK"
 };
 
+// Ініціалізація Firebase
 const app = initializeApp(firebaseConfig);
+// Ініціалізуємо Analytics, хоча він не використовується безпосередньо
+const analytics = getAnalytics(app);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
