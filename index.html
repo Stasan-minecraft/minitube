@@ -1,708 +1,388 @@
 <!DOCTYPE html>
 <html lang="uk">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>MiniTube — bone tube</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    :root{--bg:#0b0b12;--card:#141427;--muted:#a3a3c2;--text:#eef;--accent:#6d7cff;--accent2:#43dba7}
-    html,body{height:100%}
-    body{background:linear-gradient(180deg,#09090f,#0d0d16);color:var(--text);}
-    .card{background:var(--card);border:1px solid #22223b;border-radius:16px}
-    .btn{background:#161633;border:1px solid #2a2a50;border-radius:12px;padding:10px 14px}
-    .btn:hover{border-color:var(--accent)}
-    .muted{color:var(--muted)}
-    .thumb{aspect-ratio:16/9;object-fit:cover;border-radius:12px;border:1px solid #24244a}
-    .pill{border:1px solid #2b2b4a;background:#17172e;border-radius:999px;padding:2px 10px}
-    .link{color:#cbd1ff}
-    video{background:#000;border-radius:12px}
-    .hidden-vis{display:none}
-    .avatar{width:32px;height:32px;border-radius:999px;border:1px solid #2a2a50;object-fit:cover}
-    .big-avatar{width:56px;height:56px;border-radius:999px;border:1px solid #2a2a50;object-fit:cover}
-    .author-line{display:flex;align-items:center;gap:8px}
-    .modal{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);z-index:50}
-    .modal .panel{width:min(92vw,420px)}
-    .icon-btn{border:1px solid #2a2a50;border-radius:10px;padding:8px 10px;background:#151535}
-    .icon-btn.active{border-color:#43dba7;background:#0f2d2a}
-    .icon-btn.danger.active{border-color:#ff6d7c;background:#2d0f11}
-    input,textarea{background:#0f0f1f;border:1px solid #2a2a50;border-radius:12px;padding:10px;color:#e9ebff}
-    .progress{height:8px;border-radius:8px;background:#13132a;border:1px solid #2a2a50;overflow:hidden}
-    .bar{height:100%;background:linear-gradient(90deg,#5965ff,#43dba7)}
-    .line-clamp-2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyTube - Функціональний клон YouTube</title>
+    
+    <!-- Підключення Tailwind CSS для стилізації -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Підключення шрифту Inter з Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #18181b; }
+        ::-webkit-scrollbar-thumb { background: #52525b; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #71717a; }
+        .modal-backdrop {
+            background-color: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(4px);
+        }
+    </style>
 </head>
-<body class="min-h-full">
-  <!-- Topbar -->
-  <header class="fixed top-0 left-0 right-0 backdrop-blur bg-black/30 border-b border-white/10">
-    <div class="max-w-[1200px] mx-auto px-4 py-2 flex items-center gap-3">
-      <button id="btn-go-home" class="font-extrabold text-lg">MiniTube</button>
-      <span id="verLabel" class="pill text-xs"></span>
-      <form id="searchForm" class="flex-1 max-w-xl flex items-center gap-2">
-        <input id="searchInput" class="flex-1 px-3 py-2 rounded-xl bg-[#0f0f1f] border border-[#2a2a50]" placeholder="Пошук відео або каналів…"/>
-        <button class="btn">🔎</button>
-      </form>
-      <nav class="flex items-center gap-2">
-        <a id="btn-go-channels" class="btn">Канали</a>
-        <a id="btn-go-upload" class="btn hidden">⬆️ Завантажити</a>
-        <a id="nav-channel" href="#channel/me" class="btn hidden"><span id="nav-username">Мій канал</span></a>
-        <img id="nav-avatar" class="avatar hidden" alt="avatar" />
-        <button id="btn-auth" class="btn">Увійти</button>
-      </nav>
-    </div>
-  </header>
+<body class="bg-zinc-900 text-white antialiased">
 
-  <!-- Auth Modal -->
-  <div id="auth-modal" class="modal hidden">
-    <div class="panel card p-4">
-      <div class="flex justify-between items-center">
-        <div class="text-lg font-semibold">Авторизація</div>
-        <button id="btn-auth-close" class="icon-btn">✖</button>
-      </div>
-      <div class="mt-3 grid grid-cols-2 gap-2">
-        <button id="tab-login" class="btn">Вхід</button>
-        <button id="tab-signup" class="btn">Реєстрація</button>
-      </div>
-      <!-- Login -->
-      <div id="login-pane" class="mt-4 grid gap-3">
-        <input id="login-email" type="email" placeholder="Email"/>
-        <input id="login-pass" type="password" placeholder="Пароль"/>
-        <button id="btn-login" class="btn">Увійти</button>
-        <div id="login-error" class="text-red-300 text-sm"></div>
-      </div>
-      <!-- Signup -->
-      <div id="signup-pane" class="mt-4 grid gap-3 hidden">
-        <input id="su-name" type="text" placeholder="Нік (необовʼязково)"/>
-        <input id="su-email" type="email" placeholder="Email"/>
-        <input id="su-pass" type="password" placeholder="Пароль (мін. 6 символів)"/>
-        <div>
-          <label class="text-sm muted">Аватар (необовʼязково)</label>
-          <input id="su-avatar" type="file" accept="image/*"/>
+    <div id="app" class="flex h-screen overflow-hidden">
+        
+        <!-- === Бічна панель (Sidebar) === -->
+        <aside id="sidebar" class="w-64 bg-zinc-900 flex-shrink-0 border-r border-zinc-800 p-4 transform -translate-x-full md:translate-x-0 md:relative fixed h-full z-30 transition-transform duration-300 ease-in-out">
+            <div class="flex items-center gap-3 mb-8">
+                <button id="close-sidebar-btn" class="md:hidden p-1 rounded-full hover:bg-zinc-800">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+                <div class="flex items-center gap-2">
+                    <svg class="w-8 h-8 text-red-500" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"></path></svg>
+                    <span class="text-xl font-bold tracking-tighter">MyTube</span>
+                </div>
+            </div>
+            <nav class="flex flex-col gap-2">
+                <a href="#" class="flex items-center gap-4 px-3 py-2 rounded-lg bg-zinc-800 font-semibold">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
+                    <span>Головна</span>
+                </a>
+                <a href="#" class="flex items-center gap-4 px-3 py-2 rounded-lg hover:bg-zinc-800 transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                    <span>Shorts</span>
+                </a>
+                <a href="#" class="flex items-center gap-4 px-3 py-2 rounded-lg hover:bg-zinc-800 transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3h2m0 0v2m0-2H9m2 2h2m0 0v2m0-2H9m2 2h2m0 0v2m0-2H9"></path></svg>
+                    <span>Підписки</span>
+                </a>
+            </nav>
+        </aside>
+
+        <!-- === Основний контент === -->
+        <div class="flex-1 flex flex-col overflow-hidden">
+            <header class="flex items-center justify-between p-4 bg-zinc-900/80 backdrop-blur-sm border-b border-zinc-800 z-10">
+                <div class="flex items-center gap-4">
+                    <button id="open-sidebar-btn" class="md:hidden p-1 rounded-full hover:bg-zinc-800">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+                    </button>
+                </div>
+                <div class="hidden sm:flex flex-1 max-w-2xl mx-4">
+                    <input type="text" placeholder="Пошук" class="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-l-full focus:outline-none focus:ring-2 focus:ring-red-500 transition">
+                    <button class="px-5 py-2 bg-zinc-700 hover:bg-zinc-600 rounded-r-full transition-colors">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    </button>
+                </div>
+                <!-- Блок для кнопок автентифікації -->
+                <div id="auth-container" class="flex items-center gap-3"></div>
+            </header>
+
+            <main class="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8">
+                <div id="video-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-8">
+                    <!-- Відео будуть динамічно завантажуватися сюди -->
+                </div>
+            </main>
         </div>
-        <button id="btn-signup" class="btn">Зареєструватись</button>
-        <div id="signup-error" class="text-red-300 text-sm"></div>
-      </div>
     </div>
-  </div>
 
-  <!-- Profile Modal -->
-  <div id="profile-modal" class="modal hidden">
-    <div class="panel card p-4">
-      <div class="flex justify-between items-center">
-        <div class="text-lg font-semibold">Профіль</div>
-        <button id="btn-prof-close" class="icon-btn">✖</button>
-      </div>
-      <div class="mt-3 grid gap-3">
-        <input id="prof-name" type="text" placeholder="Нік"/>
-        <div>
-          <label class="text-sm muted">Новий аватар</label>
-          <input id="prof-avatar" type="file" accept="image/*"/>
+    <!-- === Модальне вікно для Автентифікації === -->
+    <div id="auth-modal" class="fixed inset-0 z-40 items-center justify-center hidden modal-backdrop">
+        <div class="bg-zinc-800 rounded-lg p-8 w-full max-w-sm shadow-xl relative">
+            <h2 class="text-2xl font-bold text-center mb-6">Вхід / Реєстрація</h2>
+            <form id="auth-form" class="flex flex-col gap-4">
+                <input type="email" id="email" placeholder="Email" class="px-4 py-2 bg-zinc-700 border border-zinc-600 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500" required>
+                <input type="password" id="password" placeholder="Пароль (мін. 6 символів)" class="px-4 py-2 bg-zinc-700 border border-zinc-600 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500" required>
+                <div class="flex gap-4">
+                    <button type="submit" id="login-btn" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-md transition">Увійти</button>
+                    <button type="submit" id="signup-btn" class="flex-1 bg-zinc-600 hover:bg-zinc-500 text-white font-semibold py-2 px-4 rounded-md transition">Створити</button>
+                </div>
+            </form>
+            <button id="close-auth-modal" class="absolute top-4 right-4 text-zinc-400 hover:text-white text-2xl leading-none">&times;</button>
         </div>
-        <button id="btn-prof-save" class="btn">Зберегти</button>
-        <div id="prof-msg" class="text-sm"></div>
-      </div>
     </div>
-  </div>
+    
+    <!-- === Модальне вікно для Завантаження Відео === -->
+    <div id="upload-modal" class="fixed inset-0 z-40 items-center justify-center hidden modal-backdrop">
+        <div class="bg-zinc-800 rounded-lg p-8 w-full max-w-md shadow-xl relative">
+            <h2 class="text-2xl font-bold text-center mb-6">Завантажити нове відео</h2>
+            <form id="upload-form" class="flex flex-col gap-4">
+                <input type="text" id="video-title" placeholder="Назва відео" class="px-4 py-2 bg-zinc-700 border border-zinc-600 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500" required>
+                <textarea id="video-description" placeholder="Опис відео" class="px-4 py-2 bg-zinc-700 border border-zinc-600 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500" rows="3"></textarea>
+                <div>
+                    <label for="video-file" class="block text-sm font-medium text-zinc-300 mb-2">Виберіть відеофайл (MP4):</label>
+                    <input type="file" id="video-file" accept="video/mp4" class="w-full text-sm text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-red-600 file:text-white hover:file:bg-red-700" required>
+                </div>
+                <button type="submit" id="upload-btn" class="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-md transition disabled:bg-zinc-500">Завантажити</button>
+                <div id="upload-progress" class="w-full bg-zinc-700 rounded-full h-2.5 hidden">
+                    <div id="progress-bar" class="bg-red-600 h-2.5 rounded-full" style="width: 0%"></div>
+                </div>
+            </form>
+             <button id="close-upload-modal" class="absolute top-4 right-4 text-zinc-400 hover:text-white text-2xl leading-none">&times;</button>
+        </div>
+    </div>
+    
+    <!-- === Інформаційне повідомлення === -->
+    <div id="toast-notification" class="fixed bottom-5 right-5 bg-green-500 text-white py-2 px-4 rounded-lg shadow-lg opacity-0 transition-opacity duration-300 z-50"></div>
 
-  <main class="pt-16">
-    <div id="app"></div>
-  </main>
+    <!-- Firebase SDK -->
+    <script type="module">
+        // Імпортуємо необхідні модулі Firebase
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, increment, serverTimestamp, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+        import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
-  <footer class="mt-10 py-8 text-center text-white/60 border-t border-white/10">© <span id="y"></span> MiniTube • <span id="ver"></span></footer>
-  <script>document.getElementById('y').textContent=new Date().getFullYear()</script>
+        // --- КОНФІГУРАЦІЯ FIREBASE ---
+        const firebaseConfig = typeof __firebase_config !== 'undefined' 
+            ? JSON.parse(__firebase_config)
+            : {
+                apiKey: "YOUR_API_KEY",
+                authDomain: "YOUR_AUTH_DOMAIN",
+                projectId: "YOUR_PROJECT_ID",
+                storageBucket: "YOUR_STORAGE_BUCKET",
+                messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+                appId: "YOUR_APP_ID"
+            };
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
-  <!-- Firebase & App -->
-  <script type="module">
-    // ===== Version =====
-    const APP_VERSION = "v6.2.0"; // Оновлюй при кожному релізі
-    document.getElementById('ver').textContent = APP_VERSION;
-    document.getElementById('verLabel').textContent = APP_VERSION;
-    const prevV = localStorage.getItem('app_version');
-    if(prevV !== APP_VERSION){
-      const el=document.createElement('div');
-      el.className="fixed top-3 left-1/2 -translate-x-1/2 bg-black/80 text-white px-4 py-2 rounded-xl border border-white/10 z-50";
-      el.textContent = `MiniTube оновлено: ${APP_VERSION}`;
-      document.body.appendChild(el); setTimeout(()=>el.remove(), 3500);
-      localStorage.setItem('app_version', APP_VERSION);
-    }
-
-    // ===== Firebase 12 =====
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
-    import {
-      getAuth, onAuthStateChanged, createUserWithEmailAndPassword,
-      signInWithEmailAndPassword, signOut, updateProfile,
-      setPersistence, browserLocalPersistence
-    } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
-    import {
-      getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc,
-      query, orderBy, limit, where, serverTimestamp, increment, arrayUnion, arrayRemove
-    } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
-    import {
-      getStorage, ref as sRef, uploadBytesResumable, getDownloadURL, deleteObject
-    } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-storage.js";
-
-    // ===== Your config (bone-tube) =====
-    const firebaseConfig = {
-      apiKey: "AIzaSyBN_k0dKVxWutHBIukRlHOv764PV2G0uCw",
-      authDomain: "bone-tube.firebaseapp.com",
-      projectId: "bone-tube",
-      storageBucket: "bone-tube.appspot.com", // ВАЖЛИВО: appspot.com
-      messagingSenderId: "476854769966",
-      appId: "1:476854769966:web:e4e4121ac13c096457c2bf",
-      measurementId: "G-KJWMF7FFJK"
-    };
-
-    // ===== Init =====
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    await setPersistence(auth, browserLocalPersistence);
-    const db = getFirestore(app);
-    const storage = getStorage(app);
-
-    // ===== Small helpers =====
-    const $ = (s)=>document.querySelector(s);
-    const appRoot = $("#app");
-    const nav = {
-      upload: $("#btn-go-upload"),
-      channel: $("#nav-channel"),
-      username: $("#nav-username"),
-      avatar: $("#nav-avatar"),
-      authBtn: $("#btn-auth"),
-      channelsBtn: $("#btn-go-channels"),
-    };
-
-    const authModal = $("#auth-modal");
-    const loginPane = $("#login-pane");
-    const signupPane = $("#signup-pane");
-
-    const profModal = $("#profile-modal");
-
-    function show(el){ el.classList.remove("hidden"); }
-    function hide(el){ el.classList.add("hidden"); }
-    function toast(msg){
-      const el=document.createElement('div');
-      el.className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-black/80 text-white px-4 py-2 rounded-xl border border-white/10 z-50";
-      el.textContent=msg; document.body.appendChild(el); setTimeout(()=>el.remove(), 3000);
-    }
-    function short(n){ n=+n||0; if(n>=1e6)return (n/1e6).toFixed(1)+"M"; if(n>=1e3)return (n/1e3).toFixed(1)+"K"; return ""+n; }
-    function esc(s){ return (s||"").replace(/[&<>"']/g,(c)=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
-
-    // ===== Router =====
-    const routes = {
-      "": renderHome,
-      "#home": renderHome,
-      "#upload": renderUpload,
-      "#watch": renderWatch,       // #watch/<id>
-      "#channel": renderChannel,   // #channel/<uid>
-      "#search": renderSearch,
-      "#channels": renderChannels  // каталог каналів + пошук
-    };
-    window.addEventListener("hashchange", ()=>go(location.hash));
-    function go(hash){
-      const [base, rest] = hash.split("/");
-      (routes[base]||renderNotFound)(rest);
-      updateNav();
-    }
-
-    // ===== Auth modal controls =====
-    $("#btn-auth").onclick = ()=>{
-      if(auth.currentUser){ doSignOut(); }
-      else { openLogin(); }
-    };
-    $("#btn-auth-close").onclick = ()=>hide(authModal);
-    $("#tab-login").onclick = ()=>{ show(loginPane); hide(signupPane); };
-    $("#tab-signup").onclick = ()=>{ show(signupPane); hide(loginPane); };
-
-    $("#btn-login").onclick = async ()=>{
-      const email = $("#login-email").value.trim();
-      const pass = $("#login-pass").value.trim();
-      $("#login-error").textContent="";
-      try{
-        await signInWithEmailAndPassword(auth, email, pass);
-        hide(authModal);
-        toast("Вхід виконано");
-        go("#home");
-      }catch(e){ $("#login-error").textContent = e.code||"Помилка входу"; }
-    };
-    $("#btn-signup").onclick = async ()=>{
-      const name = $("#su-name").value.trim();
-      const email = $("#su-email").value.trim();
-      const pass = $("#su-pass").value.trim();
-      const file = $("#su-avatar").files?.[0];
-      $("#signup-error").textContent="";
-      try{
-        const cred = await createUserWithEmailAndPassword(auth, email, pass);
-        if(name) await updateProfile(cred.user, { displayName:name });
-        // Upload avatar if provided
-        if(file){
-          const ref = sRef(storage, `avatars/${cred.user.uid}.jpg`);
-          await uploadBytesResumable(ref, file);
-          const url = await getDownloadURL(ref);
-          await updateProfile(cred.user, { photoURL:url });
-          await setDoc(doc(db,"users",cred.user.uid), {
-            uid: cred.user.uid, displayName: name||email.split("@")[0], photoURL:url,
-            email, createdAt: serverTimestamp()
-          }, { merge:true });
-        } else {
-          await setDoc(doc(db,"users",cred.user.uid), {
-            uid: cred.user.uid, displayName: name||email.split("@")[0], email,
-            createdAt: serverTimestamp()
-          }, { merge:true });
+        // Ініціалізація Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const storage = getStorage(app);
+        
+        // --- ПОСИЛАННЯ НА КОЛЕКЦІЮ ---
+        // Використовуємо правильний шлях для публічних даних
+        const videosCollectionRef = collection(db, `artifacts/${appId}/public/data/videos`);
+        
+        // --- DOM ЕЛЕМЕНТИ ---
+        const authContainer = document.getElementById('auth-container');
+        const videoGrid = document.getElementById('video-grid');
+        const authModal = document.getElementById('auth-modal');
+        const uploadModal = document.getElementById('upload-modal');
+        
+        // --- УПРАВЛІННЯ МОДАЛЬНИМИ ВІКНАМИ ---
+        function setupModal(modalId, openTriggers, closeTriggers) {
+            const modal = document.getElementById(modalId);
+            openTriggers.forEach(id => {
+                document.body.addEventListener('click', (e) => {
+                    if (e.target.closest(`#${id}`)) {
+                        modal.classList.remove('hidden');
+                        modal.classList.add('flex');
+                    }
+                });
+            });
+            closeTriggers.forEach(id => {
+                const closeBtn = document.getElementById(id);
+                if (closeBtn) {
+                     closeBtn.addEventListener('click', () => {
+                        modal.classList.add('hidden');
+                        modal.classList.remove('flex');
+                    });
+                }
+            });
         }
-        hide(authModal);
-        toast("Реєстрація виконана");
-        go("#home");
-      }catch(e){ $("#signup-error").textContent = e.code||"Помилка реєстрації"; }
-    };
+        setupModal('auth-modal', ['open-auth-modal-btn'], ['close-auth-modal']);
+        setupModal('upload-modal', ['open-upload-modal-btn'], ['close-upload-modal']);
 
-    function openLogin(){ show(authModal); show(loginPane); hide(signupPane); }
-
-    async function doSignOut(){ await signOut(auth); toast("Вихід виконано"); }
-
-    onAuthStateChanged(auth, async (user)=>{
-      // Update nav
-      if(user){
-        nav.authBtn.textContent="Вийти";
-        show(nav.upload); show(nav.channel);
-        nav.username.textContent = user.displayName || (user.email?.split("@")[0]) || "User";
-        if(user.photoURL){ nav.avatar.src=user.photoURL; nav.avatar.classList.remove('hidden'); } else { nav.avatar.classList.add('hidden'); }
-        // Ensure user doc
-        await setDoc(doc(db,"users",user.uid), {
-          uid:user.uid, displayName: user.displayName || (user.email?.split("@")[0]),
-          email: user.email || "", photoURL: user.photoURL || "", createdAt: serverTimestamp()
-        }, { merge:true });
-        hide(authModal);
-      }else{
-        nav.authBtn.textContent="Увійти";
-        nav.upload.classList.add('hidden'); nav.channel.classList.add('hidden'); nav.avatar.classList.add('hidden');
-      }
-      // Rerender current page (for auth-gated screens)
-      if(location.hash.startsWith("#upload")) renderUpload();
-    });
-
-    // ===== Nav buttons =====
-    $("#btn-go-home").onclick = ()=>location.hash="#home";
-    $("#btn-go-upload").onclick = ()=>location.hash="#upload";
-    nav.channelsBtn.onclick = ()=> location.hash = "#channels";
-    $("#nav-channel").onclick = (e)=>{ e.preventDefault(); if(!auth.currentUser){ openLogin(); return; } location.hash=`#channel/${auth.currentUser.uid}`; };
-    $("#nav-avatar").onclick = ()=> openProfile();
-
-    // ===== Profile =====
-    function openProfile(){
-      if(!auth.currentUser){ openLogin(); return; }
-      $("#prof-name").value = auth.currentUser.displayName || (auth.currentUser.email?.split("@")[0]) || "";
-      $("#prof-msg").textContent = "";
-      show(profModal);
-    }
-    $("#btn-prof-close").onclick = ()=> hide(profModal);
-    $("#btn-prof-save").onclick = async ()=>{
-      if(!auth.currentUser) return;
-      $("#prof-msg").textContent = "Збереження…";
-      try{
-        const name = $("#prof-name").value.trim();
-        if(name) await updateProfile(auth.currentUser,{displayName:name});
-        const f = $("#prof-avatar").files?.[0];
-        let url = auth.currentUser.photoURL || "";
-        if(f){
-          const ref = sRef(storage, `avatars/${auth.currentUser.uid}.jpg`);
-          await uploadBytesResumable(ref, f);
-          url = await getDownloadURL(ref);
-          await updateProfile(auth.currentUser,{photoURL:url});
+        // --- ІНФОРМАЦІЙНІ ПОВІДОМЛЕННЯ (TOAST) ---
+        const toast = document.getElementById('toast-notification');
+        function showToast(message, isError = false) {
+            toast.textContent = message;
+            toast.classList.remove(isError ? 'bg-green-500' : 'bg-red-500');
+            toast.classList.add(isError ? 'bg-red-500' : 'bg-green-500');
+            toast.classList.remove('opacity-0');
+            setTimeout(() => {
+                toast.classList.add('opacity-0');
+            }, 3000);
         }
-        await setDoc(doc(db,"users",auth.currentUser.uid),{
-          displayName: name || auth.currentUser.displayName || (auth.currentUser.email?.split("@")[0]),
-          photoURL: url
-        }, {merge:true});
-        $("#prof-msg").textContent = "Готово";
-        setTimeout(()=>hide(profModal), 700);
-        updateNav();
-      }catch(e){ $("#prof-msg").textContent = e.code||"Помилка"; }
-    };
+        
+        // --- ВІДОБРАЖЕННЯ ВІДЕО ---
+        let unsubscribeVideos = null; // Змінна для зберігання функції відписки
+        function renderVideos() {
+            if (unsubscribeVideos) {
+                unsubscribeVideos();
+            }
+            // Використовуємо правильний запит до колекції
+            const videosQuery = query(videosCollectionRef, orderBy("createdAt", "desc"));
+            unsubscribeVideos = onSnapshot(videosQuery, (snapshot) => {
+                videoGrid.innerHTML = ''; // Очищуємо сітку перед оновленням
+                if (snapshot.empty) {
+                    videoGrid.innerHTML = '<p class="text-zinc-400 col-span-full text-center">Ще немає жодного відео. Завантажте перше!</p>';
+                    return;
+                }
+                snapshot.docs.forEach(doc => {
+                    const video = doc.data();
+                    const videoId = doc.id;
+                    const videoElement = document.createElement('div');
+                    videoElement.classList.add('flex', 'flex-col', 'group');
+                    videoElement.innerHTML = `
+                        <div class="relative">
+                            <video controls class="w-full rounded-xl object-cover bg-zinc-800" src="${video.videoUrl}"></video>
+                        </div>
+                        <div class="flex items-start mt-3">
+                            <img src="https://placehold.co/48x48/71717a/ffffff?text=${video.authorEmail ? video.authorEmail.charAt(0).toUpperCase() : 'A'}" alt="Channel avatar" class="w-9 h-9 rounded-full mr-3 flex-shrink-0">
+                            <div>
+                                <h3 class="text-md font-semibold leading-tight text-zinc-100">${video.title}</h3>
+                                <p class="text-sm text-zinc-400 mt-1">${video.authorEmail || 'Анонім'}</p>
+                                <div class="flex items-center gap-2 mt-2">
+                                    <button data-id="${videoId}" class="like-btn p-1 rounded-full hover:bg-zinc-700">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 18.734V11a2 2 0 012-2h5zM5 11v10"></path></svg>
+                                    </button>
+                                    <span class="text-sm text-zinc-400">${video.likes || 0}</span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    videoGrid.appendChild(videoElement);
+                });
+            }, (error) => {
+                console.error("Error fetching videos:", error);
+                videoGrid.innerHTML = '<p class="text-red-400 col-span-full text-center">Не вдалося завантажити відео. Перевірте правила безпеки Firestore.</p>';
+            });
+        }
 
-    function updateNav(){
-      const u = auth.currentUser;
-      if(u){
-        nav.username.textContent = u.displayName || (u.email?.split("@")[0]) || "User";
-        if(u.photoURL){ nav.avatar.src = u.photoURL; nav.avatar.classList.remove('hidden'); } else { nav.avatar.classList.add('hidden'); }
-      }
-    }
+        // --- АВТЕНТИФІКАЦІЯ ---
+        async function initializeAuth() {
+            onAuthStateChanged(auth, user => {
+                if (user && !user.isAnonymous) {
+                    // Повноцінний користувач увійшов
+                    authContainer.innerHTML = `
+                        <button id="open-upload-modal-btn" class="p-2 rounded-full hover:bg-zinc-800 transition-colors">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                        </button>
+                        <button id="logout-btn-main" class="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-md transition">Вийти</button>
+                    `;
+                    document.getElementById('logout-btn-main').addEventListener('click', () => signOut(auth));
+                } else {
+                    // Користувач або анонімний, або не увійшов
+                    authContainer.innerHTML = `
+                        <button id="open-auth-modal-btn" class="bg-zinc-800 hover:bg-zinc-700 text-white font-semibold py-2 px-4 rounded-md transition">Увійти</button>
+                    `;
+                }
 
-    // ===== Search (videos + channels) =====
-    $("#searchForm").addEventListener("submit",(e)=>{
-      e.preventDefault();
-      const q = $("#searchInput").value.trim();
-      location.hash = `#search?q=${encodeURIComponent(q)}`;
-    });
+                if (user) {
+                    renderVideos();
+                } else {
+                    if (unsubscribeVideos) unsubscribeVideos();
+                    videoGrid.innerHTML = '<p class="text-zinc-400 col-span-full text-center">Будь ласка, увійдіть, щоб переглянути відео.</p>';
+                }
+            });
 
-    // ===== Pages =====
-    async function renderHome(){
-      // filters: new | popular
-      const url = new URL(location.href);
-      const q = url.hash.split("?")[1] || "";
-      const params = new URLSearchParams(q);
-      const sort = params.get('sort')||'new';
+            try {
+                if (auth.currentUser) return;
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (error) {
+                console.error("Authentication failed:", error);
+                showToast("Помилка автентифікації", true);
+            }
+        }
+        
+        initializeAuth();
 
-      appRoot.innerHTML = `
-        <div class="max-w-[1200px] mx-auto p-4">
-          <div class="flex items-center justify-between">
-            <h2 class="text-xl font-bold mb-3">Відео</h2>
-            <div class="flex items-center gap-2">
-              <button id="f-new" class="pill ${sort==='new'?'border-indigo-400 text-indigo-200':''}">Нові</button>
-              <button id="f-pop" class="pill ${sort==='popular'?'border-indigo-400 text-indigo-200':''}">Популярні</button>
-            </div>
-          </div>
-          <div id="grid" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"></div>
-        </div>`;
+        document.getElementById('auth-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const action = e.submitter.id;
 
-      $("#f-new").onclick = ()=>{ params.set('sort','new'); location.hash = `#home?${params.toString()}`; };
-      $("#f-pop").onclick = ()=>{ params.set('sort','popular'); location.hash = `#home?${params.toString()}`; };
-
-      const grid = $("#grid");
-      let qref;
-      if(sort==='popular') qref = query(collection(db,"videos"), orderBy("views","desc"), limit(60));
-      else qref = query(collection(db,"videos"), orderBy("createdAt","desc"), limit(60));
-      const snap = await getDocs(qref);
-      if(snap.empty){ grid.innerHTML = `<div class='muted'>Ще немає відео. Завантажте перше!</div>`; return; }
-      snap.forEach(d=>{ const v=d.data(); v.id=d.id; grid.appendChild(cardVideo(v)); });
-    }
-
-    function cardVideo(v){
-      const t = v.thumbURL || placeholder("MiniTube");
-      return html(`
-        <a href="#watch/${v.id}" class="card block overflow-hidden hover:border-indigo-400 transition">
-          <img class="thumb w-full" loading="lazy" src="${t}" alt="thumb"/>
-          <div class="p-3">
-            <div class="font-semibold line-clamp-2">${esc(v.title)}</div>
-            <div class="text-sm flex items-center justify-between mt-1 text-indigo-200/70">
-              <span class="author-line">${v.ownerAvatar?`<img class="avatar" src="${v.ownerAvatar}">`:``}${esc(v.ownerName||"Канал")}</span>
-              <span>${short(v.views||0)} перегл.</span>
-            </div>
-          </div>
-        </a>`);
-    }
-
-    async function renderUpload(){
-      if(!auth.currentUser){ openLogin(); return; }
-      appRoot.innerHTML = `
-        <div class="max-w-[900px] mx-auto p-4 grid md:grid-cols-2 gap-6">
-          <div>
-            <h2 class="text-xl font-bold mb-3">Завантажити відео</h2>
-            <label class="block text-sm mb-1">Назва</label>
-            <input id="in-title" class="w-full" maxlength="140"/>
-            <label class="block text-sm mt-3 mb-1">Опис</label>
-            <textarea id="in-desc" rows="6" class="w-full" maxlength="5000"></textarea>
-            <label class="block text-sm mt-3 mb-1">Відео (MP4/WebM, ≤ 300MB)</label>
-            <input id="in-file" type="file" accept="video/mp4,video/webm" class="w-full"/>
-            <div class="mt-4">
-              <div class="progress"><div id="bar" class="bar" style="width:0%"></div></div>
-            </div>
-            <div class="mt-3 flex items-center gap-3">
-              <button id="btn-upload" class="btn">⬆️ Завантажити</button>
-              <div id="up-status" class="muted text-sm"></div>
-            </div>
-            <div class="mt-3 text-sm muted">Превʼю буде згенеровано автоматично (кадр ~2с).</div>
-          </div>
-          <div>
-            <video id="preview" controls class="w-full"></video>
-            <canvas id="thumbCanvas" class="hidden-vis"></canvas>
-          </div>
-        </div>`;
-
-      const fileIn = $("#in-file");
-      const preview = $("#preview");
-      fileIn.addEventListener("change", ()=>{ const f = fileIn.files?.[0]; if(f) preview.src = URL.createObjectURL(f); });
-
-      $("#btn-upload").addEventListener("click", async ()=>{
-        const user = auth.currentUser;
-        const f = fileIn.files?.[0];
-        const title = $("#in-title").value.trim();
-        const desc  = $("#in-desc").value.trim();
-        const statusEl = $("#up-status");
-        const bar = $("#bar");
-        if(!user){ openLogin(); return; }
-        if(!f || !title){ toast("Заповніть назву та виберіть файл"); return; }
-        if(f.size > 300*1024*1024){ toast("Файл перевищує 300MB"); return; }
-        $("#btn-upload").disabled = true;
-        try{
-          statusEl.textContent = "Обробка превʼю…";
-          const thumbBlob = await extractThumbnail(preview, f);
-
-          statusEl.textContent = "Завантаження відео…";
-          const vPath = `videos/${user.uid}/${Date.now()}_${f.name.replace(/[^a-zA-Z0-9_.-]/g,'_')}`;
-          const vRef = sRef(storage, vPath);
-          const vTask = uploadBytesResumable(vRef, f);
-          vTask.on("state_changed",(snap)=>{
-            const p = Math.round((snap.bytesTransferred/snap.totalBytes)*100);
-            bar.style.width = p+"%";
-            statusEl.textContent = `Завантаження відео… ${p}%`;
-          });
-          await vTask; const videoURL = await getDownloadURL(vRef);
-
-          statusEl.textContent = "Завантаження превʼю…";
-          const tPath = `thumbs/${user.uid}/${Date.now()}_thumb.jpg`;
-          const tRef = sRef(storage, tPath);
-          await uploadBytesResumable(tRef, thumbBlob);
-          const thumbURL = await getDownloadURL(tRef);
-
-          statusEl.textContent = "Збереження…";
-          const vDoc = await addDoc(collection(db,"videos"),{
-            ownerUid: user.uid,
-            ownerName: user.displayName || (user.email?.split("@")[0]) || "User",
-            ownerAvatar: user.photoURL || "",
-            title, description: desc, videoURL, thumbURL,
-            videoPath: vPath, thumbPath: tPath,
-            createdAt: serverTimestamp(), views: 0,
-            likedBy: [], dislikedBy: []
-          });
-          toast("Готово!");
-          location.hash = `#watch/${vDoc.id}`;
-        }catch(e){ console.error(e); statusEl.textContent = e.code||"Помилка"; toast("Помилка завантаження"); }
-        finally{ $("#btn-upload").disabled = false; }
-      });
-    }
-
-    async function renderWatch(id){
-      const d = await getDoc(doc(db,"videos", id));
-      if(!d.exists()){ appRoot.innerHTML = `<div class='p-6'>Відео не знайдено</div>`; return; }
-      const v = d.data(); v.id = d.id;
-      // increment views (best-effort)
-      try{ await updateDoc(doc(db,"videos", id), { views: increment(1) }); }catch{}
-
-      const isOwner = auth.currentUser?.uid === v.ownerUid;
-
-      appRoot.innerHTML = `
-        <div class="max-w-[1200px] mx-auto p-4 grid lg:grid-cols-[1fr_360px] gap-6">
-          <div>
-            <div class="card p-2"><video controls class="w-full" src="${v.videoURL}"></video></div>
-            <div class="text-2xl font-bold mt-3">${esc(v.title)}</div>
-            <div class="flex items-center gap-3 mt-1">
-              <span class="pill">${short((v.views||0)+1)} переглядів</span>
-              <a class="pill author-line" href="#channel/${v.ownerUid}">
-                ${v.ownerAvatar?`<img class="avatar" src="${v.ownerAvatar}">`:``}
-                від ${esc(v.ownerName||"Канал")}
-              </a>
-              ${isOwner?`<button id="btn-del" class="btn">🗑 Видалити</button>`:""}
-            </div>
-            <div class="mt-3 flex items-center gap-2">
-              <button id="likeBtn" class="icon-btn">👍</button>
-              <span id="likeCount" class="muted">${short((v.likedBy?.length)||0)}</span>
-              <button id="dislikeBtn" class="icon-btn danger">👎</button>
-              <span id="dislikeCount" class="muted">${short((v.dislikedBy?.length)||0)}</span>
-            </div>
-            <div class="mt-3 card p-3">
-              <div class="muted">Опис</div>
-              <div class="mt-1 whitespace-pre-wrap">${esc(v.description||"")}</div>
-            </div>
-
-            <div class="mt-4">
-              <div class="text-lg font-semibold mb-2">Коментарі</div>
-              <div id="c-form"></div>
-              <div id="c-list" class="grid gap-2"></div>
-            </div>
-          </div>
-          <aside>
-            <div class="text-lg font-semibold mb-2">Рекомендовані</div>
-            <div id="rec" class="grid gap-3"></div>
-          </aside>
-        </div>`;
-
-      // Delete (owner)
-      if(isOwner){
-        $("#btn-del").onclick = async ()=>{
-          if(!confirm("Видалити відео?")) return;
-          try{ await deleteObject(sRef(storage, v.videoPath)); await deleteObject(sRef(storage, v.thumbPath)); }catch{}
-          await deleteDoc(doc(db,"videos", id));
-          toast("Видалено"); location.hash="#home";
-        };
-      }
-
-      // Like / Dislike behaviour
-      const likeBtn = $("#likeBtn"), dislikeBtn = $("#dislikeBtn");
-      function updateLikeUI(){
-        const uid = auth.currentUser?.uid;
-        likeBtn.classList.toggle("active", !!uid && v.likedBy?.includes(uid));
-        dislikeBtn.classList.toggle("active", !!uid && v.dislikedBy?.includes(uid));
-        $("#likeCount").textContent = short(v.likedBy?.length||0);
-        $("#dislikeCount").textContent = short(v.dislikedBy?.length||0);
-      }
-      likeBtn.onclick = async ()=>{
-        if(!auth.currentUser){ openLogin(); return; }
-        const uid = auth.currentUser.uid; const ref = doc(db,"videos", id);
-        if(v.likedBy?.includes(uid)){ await updateDoc(ref, { likedBy: arrayRemove(uid) }); v.likedBy = v.likedBy.filter(x=>x!==uid); }
-        else { await updateDoc(ref, { likedBy: arrayUnion(uid), dislikedBy: arrayRemove(uid) }); v.likedBy = [...(v.likedBy||[]), uid]; v.dislikedBy = (v.dislikedBy||[]).filter(x=>x!==uid); }
-        updateLikeUI();
-      };
-      dislikeBtn.onclick = async ()=>{
-        if(!auth.currentUser){ openLogin(); return; }
-        const uid = auth.currentUser.uid; const ref = doc(db,"videos", id);
-        if(v.dislikedBy?.includes(uid)){ await updateDoc(ref, { dislikedBy: arrayRemove(uid) }); v.dislikedBy = v.dislikedBy.filter(x=>x!==uid); }
-        else { await updateDoc(ref, { dislikedBy: arrayUnion(uid), likedBy: arrayRemove(uid) }); v.dislikedBy = [...(v.dislikedBy||[]), uid]; v.likedBy = (v.likedBy||[]).filter(x=>x!==uid); }
-        updateLikeUI();
-      };
-      updateLikeUI();
-
-      // Comments
-      const cf = $("#c-form");
-      if(auth.currentUser){
-        cf.innerHTML = `
-          <div class="card p-3 grid gap-2">
-            <div class="flex items-center gap-2">
-              ${auth.currentUser.photoURL?`<img class="avatar" src="${auth.currentUser.photoURL}">`:""}
-              <div class="font-semibold">${esc(auth.currentUser.displayName||auth.currentUser.email)}</div>
-            </div>
-            <textarea id="c-text" rows="3" class="p-3 rounded-xl bg-[#0f0f1f] border border-[#2a2a50]" placeholder="Залиште коментар…"></textarea>
-            <div class="flex gap-2"><button id="c-send" class="btn">Надіслати</button></div>
-          </div>`;
-        $("#c-send").onclick = async ()=>{
-          const txt = $("#c-text").value.trim(); if(!txt) return;
-          await addDoc(collection(db, "videos", id, "comments"), {
-            userUid: auth.currentUser.uid,
-            userName: auth.currentUser.displayName || auth.currentUser.email?.split("@")[0] || "User",
-            userAvatar: auth.currentUser.photoURL || "",
-            content: txt, createdAt: serverTimestamp()
-          });
-          $("#c-text").value=""; await loadComments();
-        };
-      }else{
-        cf.innerHTML = `<div class='muted'>Щоб коментувати, <button class="link" id="c-login">увійдіть</button>.</div>`; $("#c-login").onclick = ()=>openLogin();
-      }
-      async function loadComments(){
-        const list = $("#c-list"); list.innerHTML="";
-        const snap = await getDocs(query(collection(db,"videos", id, "comments"), orderBy("createdAt","desc"), limit(100)));
-        if(snap.empty){ list.innerHTML = `<div class='muted'>Поки без коментарів</div>`; return; }
-        snap.forEach(c=>{
-          const x=c.data();
-          list.appendChild(html(`<div class="card p-3">
-            <div class="flex items-center gap-2 text-sm">${x.userAvatar?`<img class="avatar" src="${x.userAvatar}">`:""}<div class="muted">${esc(x.userName||"")}</div></div>
-            <div class="mt-1 whitespace-pre-wrap">${esc(x.content||"")}</div>
-          </div>`));
+            try {
+                if (action === 'signup-btn') {
+                    await createUserWithEmailAndPassword(auth, email, password);
+                    showToast('Акаунт успішно створено!');
+                } else {
+                    await signInWithEmailAndPassword(auth, email, password);
+                    showToast('Ви успішно увійшли!');
+                }
+                authModal.classList.add('hidden');
+                authModal.classList.remove('flex');
+                document.getElementById('auth-form').reset();
+            } catch (error) {
+                showToast(`Помилка: ${error.message}`, true);
+            }
         });
-      }
-      await loadComments();
 
-      // Recommendations
-      const rec = $("#rec");
-      const qSnap = await getDocs(query(collection(db,"videos"), orderBy("createdAt","desc"), limit(12)));
-      qSnap.forEach(d=>{ const vv=d.data(); vv.id=d.id; if(vv.id!==id) rec.appendChild(cardHoriz(vv)); });
-    }
-    function cardHoriz(v){
-      const t = v.thumbURL || placeholder("MiniTube");
-      return html(`<a href="#watch/${v.id}" class="flex gap-3 items-center card p-2"><img src="${t}" width="120" height="68" class="object-cover rounded-lg border border-[#24244a]"/><div class="flex-1"><div class="font-semibold line-clamp-2">${esc(v.title)}</div><div class="text-sm muted">${short(v.views||0)} перегл.</div></div></a>`);
-    }
+        // --- ЗАВАНТАЖЕННЯ ВІДЕО ---
+        const uploadForm = document.getElementById('upload-form');
+        const uploadProgress = document.getElementById('upload-progress');
+        const progressBar = document.getElementById('progress-bar');
+        const uploadBtn = document.getElementById('upload-btn');
 
-    async function renderChannel(uid){
-      // if "me"
-      if(uid==="me"){ if(!auth.currentUser){ openLogin(); return; } uid = auth.currentUser.uid; }
-      const isMe = auth.currentUser?.uid===uid;
-      let userDoc=null; try{ const u = await getDoc(doc(db,'users',uid)); if(u.exists()) userDoc = u.data(); }catch{}
-      appRoot.innerHTML = `<div class='max-w-[1200px] mx-auto p-4'>
-        <div class='flex items-center gap-3 mb-3'>
-          ${userDoc?.photoURL?`<img class='big-avatar' src='${userDoc.photoURL}'>`:''}
-          <h2 class='text-xl font-bold'>${esc(userDoc?.displayName||'Канал')}</h2>
-          ${isMe?`<button id='btn-prof' class='btn ml-auto'>Профіль</button>`:''}
-        </div>
-        <div id='grid' class='grid gap-4 sm:grid-cols-2 lg:grid-cols-3'></div></div>`;
-      if(isMe){ $("#btn-prof").onclick = ()=> openProfile(); }
-      const grid = $("#grid");
-      const snap = await getDocs(query(collection(db,"videos"), where("ownerUid","==",uid), orderBy("createdAt","desc"), limit(60)));
-      if(snap.empty){ grid.innerHTML = `<div class='muted'>На каналі ще немає відео</div>`; return; }
-      snap.forEach(d=>{ const v=d.data(); v.id=d.id; grid.appendChild(cardVideo(v)); });
-    }
+        uploadForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const title = document.getElementById('video-title').value;
+            const description = document.getElementById('video-description').value;
+            const file = document.getElementById('video-file').files[0];
+            const user = auth.currentUser;
 
-    async function renderChannels(){
-      // каталог каналів з пошуком
-      appRoot.innerHTML = `
-        <div class='max-w-[1200px] mx-auto p-4'>
-          <div class='flex items-center justify-between mb-3'>
-            <h2 class='text-xl font-bold'>Канали</h2>
-            <input id='ch-q' placeholder='Пошук каналів…' class='px-3 py-2 rounded-xl bg-[#0f0f1f] border border-[#2a2a50] w-64'/>
-          </div>
-          <div id='ch-grid' class='grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'></div>
-        </div>`;
-      const grid = $('#ch-grid');
-      const q = await getDocs(query(collection(db,'users'), orderBy('displayName'), limit(200)));
-      const channels = [];
-      q.forEach(d=> channels.push({id:d.id, ...d.data()}));
-      function render(list){
-        grid.innerHTML='';
-        if(!list.length){ grid.innerHTML = `<div class='muted'>Нічого не знайдено</div>`; return; }
-        list.forEach(u=> grid.appendChild(channelCard(u)));
-      }
-      function channelCard(u){
-        return html(`<a href='#channel/${u.uid||u.id}' class='card p-3 block hover:border-indigo-400'>
-          <div class='flex items-center gap-3'>
-            ${u.photoURL?`<img class='big-avatar' src='${u.photoURL}'>`:`<div class='big-avatar bg-[#0f0f1f]'></div>`}
-            <div>
-              <div class='font-semibold'>${esc(u.displayName||'Канал')}</div>
-              <div class='text-xs muted'>@${esc((u.email||'').split('@')[0]||'')}</div>
-            </div>
-          </div>
-        </a>`);
-      }
-      const input = $('#ch-q');
-      input.oninput = ()=>{
-        const s = input.value.trim().toLowerCase();
-        if(!s) return render(channels);
-        render(channels.filter(u=> (u.displayName||'').toLowerCase().includes(s) || (u.email||'').toLowerCase().includes(s)));
-      };
-      render(channels);
-    }
+            if (!file || !user || user.isAnonymous) {
+                showToast('Будь ласка, увійдіть в акаунт, щоб завантажити відео', true);
+                return;
+            }
+            
+            uploadBtn.disabled = true;
+            uploadProgress.classList.remove('hidden');
 
-    async function renderSearch(){
-      const url = new URL(location.href);
-      const q = url.hash.split("?")[1] || "";
-      const qparam = new URLSearchParams(q).get("q") || "";
-      appRoot.innerHTML = `<div class='max-w-[1200px] mx-auto p-4'>
-        <h2 class='text-xl font-bold mb-3'>Результати: ${esc(qparam)}</h2>
-        <div class='grid lg:grid-cols-3 gap-6'>
-          <div class='lg:col-span-2'>
-            <h3 class='font-semibold mb-2'>Відео</h3>
-            <div id='v-grid' class='grid gap-4 sm:grid-cols-2'></div>
-          </div>
-          <div>
-            <h3 class='font-semibold mb-2'>Канали</h3>
-            <div id='u-grid' class='grid gap-3'></div>
-          </div>
-        </div>
-      </div>`;
-      const vgrid = $('#v-grid');
-      const ugrid = $('#u-grid');
+            const storageRef = ref(storage, `videos/${user.uid}/${Date.now()}_${file.name}`);
+            const uploadTask = uploadBytesResumable(storageRef, file);
 
-      if(!qparam){ vgrid.innerHTML = `<div class='muted'>Введіть запит у пошуку зверху</div>`; ugrid.innerHTML=''; return; }
-      // videos (client filter)
-      const vsnap = await getDocs(query(collection(db,'videos'), orderBy('createdAt','desc'), limit(200)));
-      const vids=[]; vsnap.forEach(d=>{ const v=d.data(); v.id=d.id; if((v.title+"\n"+(v.description||"")).toLowerCase().includes(qparam.toLowerCase())) vids.push(v) });
-      if(!vids.length) vgrid.innerHTML = `<div class='muted'>Нічого не знайдено</div>`; else vids.forEach(v=> vgrid.appendChild(cardVideo(v)));
-      // users (client filter)
-      const usnap = await getDocs(query(collection(db,'users'), orderBy('displayName'), limit(200)));
-      const users=[]; usnap.forEach(d=> users.push({id:d.id, ...d.data()}));
-      const filt = users.filter(u=> (u.displayName||'').toLowerCase().includes(qparam.toLowerCase()) || (u.email||'').toLowerCase().includes(qparam.toLowerCase()));
-      if(!filt.length) ugrid.innerHTML = `<div class='muted'>Нічого не знайдено</div>`; else filt.forEach(u=> ugrid.appendChild(html(`<a href='#channel/${u.uid||u.id}' class='card p-3 block hover:border-indigo-400'><div class='flex items-center gap-3'>${u.photoURL?`<img class='avatar' src='${u.photoURL}'>`:`<div class='avatar bg-[#0f0f1f]'></div>`}<div><div class='font-semibold'>${esc(u.displayName||'Канал')}</div><div class='text-xs muted'>@${esc((u.email||'').split('@')[0]||'')}</div></div></div></a>`)));
-    }
+            uploadTask.on('state_changed', 
+                (snapshot) => {
+                    const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                    progressBar.style.width = progress + '%';
+                }, 
+                (error) => {
+                    showToast(`Помилка завантаження: ${error.message}`, true);
+                    uploadBtn.disabled = false;
+                    uploadProgress.classList.add('hidden');
+                }, 
+                async () => {
+                    const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+                    // Використовуємо правильний шлях для додавання документу
+                    await addDoc(videosCollectionRef, {
+                        title,
+                        description,
+                        videoUrl: downloadURL,
+                        authorId: user.uid,
+                        authorEmail: user.email,
+                        createdAt: serverTimestamp(),
+                        likes: 0,
+                    });
+                    showToast('Відео успішно завантажено!');
+                    uploadForm.reset();
+                    uploadBtn.disabled = false;
+                    uploadProgress.classList.add('hidden');
+                    progressBar.style.width = '0%';
+                    uploadModal.classList.add('hidden');
+                    uploadModal.classList.remove('flex');
+                }
+            );
+        });
 
-    function renderNotFound(){ appRoot.innerHTML = `<div class='p-6'>Сторінку не знайдено</div>`; }
+        // --- СИСТЕМА ЛАЙКІВ ---
+        videoGrid.addEventListener('click', async (e) => {
+            const likeBtn = e.target.closest('.like-btn');
+            if (likeBtn) {
+                const user = auth.currentUser;
+                if (!user || user.isAnonymous) {
+                    showToast('Щоб поставити лайк, потрібно увійти в акаунт', true);
+                    return;
+                }
+                const videoId = likeBtn.dataset.id;
+                // Використовуємо правильний шлях для оновлення документу
+                const videoRef = doc(videosCollectionRef, videoId);
+                await updateDoc(videoRef, {
+                    likes: increment(1)
+                });
+            }
+        });
+        
+        // --- ІНТЕРАКТИВНІСТЬ ІНТЕРФЕЙСУ ---
+        const sidebar = document.getElementById('sidebar');
+        document.getElementById('open-sidebar-btn').addEventListener('click', () => sidebar.classList.remove('-translate-x-full'));
+        document.getElementById('close-sidebar-btn').addEventListener('click', () => sidebar.classList.add('-translate-x-full'));
 
-    // ===== DOM utils =====
-    function html(s){ const t=document.createElement('template'); t.innerHTML=s.trim(); return t.content.firstChild; }
-    function placeholder(txt){
-      const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='480' height='270'><defs><linearGradient id='g' x1='0' x2='1'><stop stop-color='#1a1a2f'/><stop offset='1' stop-color='#232342'/></linearGradient></defs><rect width='100%' height='100%' fill='url(#g)'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' fill='#9aa' font-family='Inter,ui-sans-serif,system-ui' font-size='20'>${txt}</text></svg>`;
-      return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
-    }
-    async function extractThumbnail(videoEl, file){
-      if(!videoEl.src) videoEl.src = URL.createObjectURL(file);
-      await new Promise(res=> videoEl.readyState>=2?res(): videoEl.addEventListener('loadeddata',()=>res(),{once:true}));
-      try{ videoEl.currentTime = Math.min(2, videoEl.duration||2); }catch{}
-      await new Promise(res=> videoEl.addEventListener('timeupdate',()=>res(),{once:true}));
-      const canvas = document.getElementById('thumbCanvas');
-      const w = 480; const h = Math.round(w / (16/9));
-      canvas.width=w; canvas.height=h; const ctx = canvas.getContext('2d');
-      ctx.drawImage(videoEl, 0, 0, w, h);
-      const blob = await new Promise(res=> canvas.toBlob(res,'image/jpeg',0.85));
-      return blob;
-    }
-
-    // ===== Start =====
-    go(location.hash || "#home");
-  </script>
+    </script>
 </body>
 </html>
