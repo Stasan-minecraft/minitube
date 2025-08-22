@@ -35,13 +35,15 @@
 <body class="min-h-full">
   <!-- Topbar -->
   <header class="fixed top-0 left-0 right-0 backdrop-blur bg-black/30 border-b border-white/10">
-    <div class="max-w-[1100px] mx-auto px-4 py-2 flex items-center gap-3">
+    <div class="max-w-[1200px] mx-auto px-4 py-2 flex items-center gap-3">
       <button id="btn-go-home" class="font-extrabold text-lg">MiniTube</button>
+      <span id="verLabel" class="pill text-xs"></span>
       <form id="searchForm" class="flex-1 max-w-xl flex items-center gap-2">
-        <input id="searchInput" class="flex-1 px-3 py-2 rounded-xl bg-[#0f0f1f] border border-[#2a2a50]" placeholder="Пошук…"/>
+        <input id="searchInput" class="flex-1 px-3 py-2 rounded-xl bg-[#0f0f1f] border border-[#2a2a50]" placeholder="Пошук відео або каналів…"/>
         <button class="btn">🔎</button>
       </form>
       <nav class="flex items-center gap-2">
+        <a id="btn-go-channels" class="btn">Канали</a>
         <a id="btn-go-upload" class="btn hidden">⬆️ Завантажити</a>
         <a id="nav-channel" href="#channel/me" class="btn hidden"><span id="nav-username">Мій канал</span></a>
         <img id="nav-avatar" class="avatar hidden" alt="avatar" />
@@ -106,11 +108,24 @@
     <div id="app"></div>
   </main>
 
-  <footer class="mt-10 py-8 text-center text-white/60 border-t border-white/10">© <span id="y"></span> MiniTube</footer>
+  <footer class="mt-10 py-8 text-center text-white/60 border-t border-white/10">© <span id="y"></span> MiniTube • <span id="ver"></span></footer>
   <script>document.getElementById('y').textContent=new Date().getFullYear()</script>
 
   <!-- Firebase & App -->
   <script type="module">
+    // ===== Version =====
+    const APP_VERSION = "v6.2.0"; // Оновлюй при кожному релізі
+    document.getElementById('ver').textContent = APP_VERSION;
+    document.getElementById('verLabel').textContent = APP_VERSION;
+    const prevV = localStorage.getItem('app_version');
+    if(prevV !== APP_VERSION){
+      const el=document.createElement('div');
+      el.className="fixed top-3 left-1/2 -translate-x-1/2 bg-black/80 text-white px-4 py-2 rounded-xl border border-white/10 z-50";
+      el.textContent = `MiniTube оновлено: ${APP_VERSION}`;
+      document.body.appendChild(el); setTimeout(()=>el.remove(), 3500);
+      localStorage.setItem('app_version', APP_VERSION);
+    }
+
     // ===== Firebase 12 =====
     import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
     import {
@@ -131,7 +146,7 @@
       apiKey: "AIzaSyBN_k0dKVxWutHBIukRlHOv764PV2G0uCw",
       authDomain: "bone-tube.firebaseapp.com",
       projectId: "bone-tube",
-      storageBucket: "bone-tube.appspot.com", // ВАЖЛИВО: appspot.com, не firebasestorage.app
+      storageBucket: "bone-tube.appspot.com", // ВАЖЛИВО: appspot.com
       messagingSenderId: "476854769966",
       appId: "1:476854769966:web:e4e4121ac13c096457c2bf",
       measurementId: "G-KJWMF7FFJK"
@@ -153,6 +168,7 @@
       username: $("#nav-username"),
       avatar: $("#nav-avatar"),
       authBtn: $("#btn-auth"),
+      channelsBtn: $("#btn-go-channels"),
     };
 
     const authModal = $("#auth-modal");
@@ -178,7 +194,8 @@
       "#upload": renderUpload,
       "#watch": renderWatch,       // #watch/<id>
       "#channel": renderChannel,   // #channel/<uid>
-      "#search": renderSearch
+      "#search": renderSearch,
+      "#channels": renderChannels  // каталог каналів + пошук
     };
     window.addEventListener("hashchange", ()=>go(location.hash));
     function go(hash){
@@ -248,16 +265,16 @@
         nav.authBtn.textContent="Вийти";
         show(nav.upload); show(nav.channel);
         nav.username.textContent = user.displayName || (user.email?.split("@")[0]) || "User";
-        if(user.photoURL){ nav.avatar.src=user.photoURL; show(nav.avatar); } else { hide(nav.avatar); }
+        if(user.photoURL){ nav.avatar.src=user.photoURL; nav.avatar.classList.remove('hidden'); } else { nav.avatar.classList.add('hidden'); }
         // Ensure user doc
         await setDoc(doc(db,"users",user.uid), {
           uid:user.uid, displayName: user.displayName || (user.email?.split("@")[0]),
-          email: user.email || "", photoURL: user.photoURL || ""
+          email: user.email || "", photoURL: user.photoURL || "", createdAt: serverTimestamp()
         }, { merge:true });
         hide(authModal);
       }else{
         nav.authBtn.textContent="Увійти";
-        hide(nav.upload); hide(nav.channel); hide(nav.avatar);
+        nav.upload.classList.add('hidden'); nav.channel.classList.add('hidden'); nav.avatar.classList.add('hidden');
       }
       // Rerender current page (for auth-gated screens)
       if(location.hash.startsWith("#upload")) renderUpload();
@@ -266,6 +283,7 @@
     // ===== Nav buttons =====
     $("#btn-go-home").onclick = ()=>location.hash="#home";
     $("#btn-go-upload").onclick = ()=>location.hash="#upload";
+    nav.channelsBtn.onclick = ()=> location.hash = "#channels";
     $("#nav-channel").onclick = (e)=>{ e.preventDefault(); if(!auth.currentUser){ openLogin(); return; } location.hash=`#channel/${auth.currentUser.uid}`; };
     $("#nav-avatar").onclick = ()=> openProfile();
 
@@ -305,11 +323,11 @@
       const u = auth.currentUser;
       if(u){
         nav.username.textContent = u.displayName || (u.email?.split("@")[0]) || "User";
-        if(u.photoURL){ nav.avatar.src = u.photoURL; show(nav.avatar);} else { hide(nav.avatar); }
+        if(u.photoURL){ nav.avatar.src = u.photoURL; nav.avatar.classList.remove('hidden'); } else { nav.avatar.classList.add('hidden'); }
       }
     }
 
-    // ===== Search =====
+    // ===== Search (videos + channels) =====
     $("#searchForm").addEventListener("submit",(e)=>{
       e.preventDefault();
       const q = $("#searchInput").value.trim();
@@ -318,19 +336,36 @@
 
     // ===== Pages =====
     async function renderHome(){
+      // filters: new | popular
+      const url = new URL(location.href);
+      const q = url.hash.split("?")[1] || "";
+      const params = new URLSearchParams(q);
+      const sort = params.get('sort')||'new';
+
       appRoot.innerHTML = `
-        <div class="max-w-[1100px] mx-auto p-4">
-          <h2 class="text-xl font-bold mb-3">Останні відео</h2>
+        <div class="max-w-[1200px] mx-auto p-4">
+          <div class="flex items-center justify-between">
+            <h2 class="text-xl font-bold mb-3">Відео</h2>
+            <div class="flex items-center gap-2">
+              <button id="f-new" class="pill ${sort==='new'?'border-indigo-400 text-indigo-200':''}">Нові</button>
+              <button id="f-pop" class="pill ${sort==='popular'?'border-indigo-400 text-indigo-200':''}">Популярні</button>
+            </div>
+          </div>
           <div id="grid" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"></div>
         </div>`;
+
+      $("#f-new").onclick = ()=>{ params.set('sort','new'); location.hash = `#home?${params.toString()}`; };
+      $("#f-pop").onclick = ()=>{ params.set('sort','popular'); location.hash = `#home?${params.toString()}`; };
+
       const grid = $("#grid");
-      const snap = await getDocs(query(collection(db,"videos"), orderBy("createdAt","desc"), limit(60)));
+      let qref;
+      if(sort==='popular') qref = query(collection(db,"videos"), orderBy("views","desc"), limit(60));
+      else qref = query(collection(db,"videos"), orderBy("createdAt","desc"), limit(60));
+      const snap = await getDocs(qref);
       if(snap.empty){ grid.innerHTML = `<div class='muted'>Ще немає відео. Завантажте перше!</div>`; return; }
-      snap.forEach(d=>{
-        const v=d.data(); v.id=d.id;
-        grid.appendChild(cardVideo(v));
-      });
+      snap.forEach(d=>{ const v=d.data(); v.id=d.id; grid.appendChild(cardVideo(v)); });
     }
+
     function cardVideo(v){
       const t = v.thumbURL || placeholder("MiniTube");
       return html(`
@@ -375,10 +410,7 @@
 
       const fileIn = $("#in-file");
       const preview = $("#preview");
-      fileIn.addEventListener("change", ()=>{
-        const f = fileIn.files?.[0]; if(!f) return;
-        preview.src = URL.createObjectURL(f);
-      });
+      fileIn.addEventListener("change", ()=>{ const f = fileIn.files?.[0]; if(f) preview.src = URL.createObjectURL(f); });
 
       $("#btn-upload").addEventListener("click", async ()=>{
         const user = auth.currentUser;
@@ -439,7 +471,7 @@
       const isOwner = auth.currentUser?.uid === v.ownerUid;
 
       appRoot.innerHTML = `
-        <div class="max-w-[1100px] mx-auto p-4 grid lg:grid-cols-[1fr_360px] gap-6">
+        <div class="max-w-[1200px] mx-auto p-4 grid lg:grid-cols-[1fr_360px] gap-6">
           <div>
             <div class="card p-2"><video controls class="w-full" src="${v.videoURL}"></video></div>
             <div class="text-2xl font-bold mt-3">${esc(v.title)}</div>
@@ -478,10 +510,7 @@
       if(isOwner){
         $("#btn-del").onclick = async ()=>{
           if(!confirm("Видалити відео?")) return;
-          try{
-            await deleteObject(sRef(storage, v.videoPath));
-            await deleteObject(sRef(storage, v.thumbPath));
-          }catch{}
+          try{ await deleteObject(sRef(storage, v.videoPath)); await deleteObject(sRef(storage, v.thumbPath)); }catch{}
           await deleteDoc(doc(db,"videos", id));
           toast("Видалено"); location.hash="#home";
         };
@@ -498,30 +527,16 @@
       }
       likeBtn.onclick = async ()=>{
         if(!auth.currentUser){ openLogin(); return; }
-        const uid = auth.currentUser.uid;
-        const ref = doc(db,"videos", id);
-        if(v.likedBy?.includes(uid)){
-          await updateDoc(ref, { likedBy: arrayRemove(uid) });
-          v.likedBy = v.likedBy.filter(x=>x!==uid);
-        } else {
-          await updateDoc(ref, { likedBy: arrayUnion(uid), dislikedBy: arrayRemove(uid) });
-          v.likedBy = [...(v.likedBy||[]), uid];
-          v.dislikedBy = (v.dislikedBy||[]).filter(x=>x!==uid);
-        }
+        const uid = auth.currentUser.uid; const ref = doc(db,"videos", id);
+        if(v.likedBy?.includes(uid)){ await updateDoc(ref, { likedBy: arrayRemove(uid) }); v.likedBy = v.likedBy.filter(x=>x!==uid); }
+        else { await updateDoc(ref, { likedBy: arrayUnion(uid), dislikedBy: arrayRemove(uid) }); v.likedBy = [...(v.likedBy||[]), uid]; v.dislikedBy = (v.dislikedBy||[]).filter(x=>x!==uid); }
         updateLikeUI();
       };
       dislikeBtn.onclick = async ()=>{
         if(!auth.currentUser){ openLogin(); return; }
-        const uid = auth.currentUser.uid;
-        const ref = doc(db,"videos", id);
-        if(v.dislikedBy?.includes(uid)){
-          await updateDoc(ref, { dislikedBy: arrayRemove(uid) });
-          v.dislikedBy = v.dislikedBy.filter(x=>x!==uid);
-        } else {
-          await updateDoc(ref, { dislikedBy: arrayUnion(uid), likedBy: arrayRemove(uid) });
-          v.dislikedBy = [...(v.dislikedBy||[]), uid];
-          v.likedBy = (v.likedBy||[]).filter(x=>x!==uid);
-        }
+        const uid = auth.currentUser.uid; const ref = doc(db,"videos", id);
+        if(v.dislikedBy?.includes(uid)){ await updateDoc(ref, { dislikedBy: arrayRemove(uid) }); v.dislikedBy = v.dislikedBy.filter(x=>x!==uid); }
+        else { await updateDoc(ref, { dislikedBy: arrayUnion(uid), likedBy: arrayRemove(uid) }); v.dislikedBy = [...(v.dislikedBy||[]), uid]; v.likedBy = (v.likedBy||[]).filter(x=>x!==uid); }
         updateLikeUI();
       };
       updateLikeUI();
@@ -536,9 +551,7 @@
               <div class="font-semibold">${esc(auth.currentUser.displayName||auth.currentUser.email)}</div>
             </div>
             <textarea id="c-text" rows="3" class="p-3 rounded-xl bg-[#0f0f1f] border border-[#2a2a50]" placeholder="Залиште коментар…"></textarea>
-            <div class="flex gap-2">
-              <button id="c-send" class="btn">Надіслати</button>
-            </div>
+            <div class="flex gap-2"><button id="c-send" class="btn">Надіслати</button></div>
           </div>`;
         $("#c-send").onclick = async ()=>{
           const txt = $("#c-text").value.trim(); if(!txt) return;
@@ -548,12 +561,10 @@
             userAvatar: auth.currentUser.photoURL || "",
             content: txt, createdAt: serverTimestamp()
           });
-          $("#c-text").value="";
-          await loadComments();
+          $("#c-text").value=""; await loadComments();
         };
       }else{
-        cf.innerHTML = `<div class='muted'>Щоб коментувати, <button class="link" id="c-login">увійдіть</button>.</div>`;
-        $("#c-login").onclick = ()=>openLogin();
+        cf.innerHTML = `<div class='muted'>Щоб коментувати, <button class="link" id="c-login">увійдіть</button>.</div>`; $("#c-login").onclick = ()=>openLogin();
       }
       async function loadComments(){
         const list = $("#c-list"); list.innerHTML="";
@@ -562,10 +573,7 @@
         snap.forEach(c=>{
           const x=c.data();
           list.appendChild(html(`<div class="card p-3">
-            <div class="flex items-center gap-2 text-sm">
-              ${x.userAvatar?`<img class="avatar" src="${x.userAvatar}">`:""}
-              <div class="muted">${esc(x.userName||"")}</div>
-            </div>
+            <div class="flex items-center gap-2 text-sm">${x.userAvatar?`<img class="avatar" src="${x.userAvatar}">`:""}<div class="muted">${esc(x.userName||"")}</div></div>
             <div class="mt-1 whitespace-pre-wrap">${esc(x.content||"")}</div>
           </div>`));
         });
@@ -579,27 +587,18 @@
     }
     function cardHoriz(v){
       const t = v.thumbURL || placeholder("MiniTube");
-      return html(`
-        <a href="#watch/${v.id}" class="flex gap-3 items-center card p-2">
-          <img src="${t}" width="120" height="68" class="object-cover rounded-lg border border-[#24244a]"/>
-          <div class="flex-1">
-            <div class="font-semibold line-clamp-2">${esc(v.title)}</div>
-            <div class="text-sm muted">${short(v.views||0)} перегл.</div>
-          </div>
-        </a>`);
+      return html(`<a href="#watch/${v.id}" class="flex gap-3 items-center card p-2"><img src="${t}" width="120" height="68" class="object-cover rounded-lg border border-[#24244a]"/><div class="flex-1"><div class="font-semibold line-clamp-2">${esc(v.title)}</div><div class="text-sm muted">${short(v.views||0)} перегл.</div></div></a>`);
     }
 
     async function renderChannel(uid){
       // if "me"
-      if(uid==="me"){
-        if(!auth.currentUser){ openLogin(); return; }
-        uid = auth.currentUser.uid;
-      }
+      if(uid==="me"){ if(!auth.currentUser){ openLogin(); return; } uid = auth.currentUser.uid; }
       const isMe = auth.currentUser?.uid===uid;
-      appRoot.innerHTML = `<div class='max-w-[1100px] mx-auto p-4'>
+      let userDoc=null; try{ const u = await getDoc(doc(db,'users',uid)); if(u.exists()) userDoc = u.data(); }catch{}
+      appRoot.innerHTML = `<div class='max-w-[1200px] mx-auto p-4'>
         <div class='flex items-center gap-3 mb-3'>
-          ${auth.currentUser?.photoURL && isMe?`<img class='big-avatar' src='${auth.currentUser.photoURL}'>`:''}
-          <h2 class='text-xl font-bold'>Канал</h2>
+          ${userDoc?.photoURL?`<img class='big-avatar' src='${userDoc.photoURL}'>`:''}
+          <h2 class='text-xl font-bold'>${esc(userDoc?.displayName||'Канал')}</h2>
           ${isMe?`<button id='btn-prof' class='btn ml-auto'>Профіль</button>`:''}
         </div>
         <div id='grid' class='grid gap-4 sm:grid-cols-2 lg:grid-cols-3'></div></div>`;
@@ -610,19 +609,75 @@
       snap.forEach(d=>{ const v=d.data(); v.id=d.id; grid.appendChild(cardVideo(v)); });
     }
 
+    async function renderChannels(){
+      // каталог каналів з пошуком
+      appRoot.innerHTML = `
+        <div class='max-w-[1200px] mx-auto p-4'>
+          <div class='flex items-center justify-between mb-3'>
+            <h2 class='text-xl font-bold'>Канали</h2>
+            <input id='ch-q' placeholder='Пошук каналів…' class='px-3 py-2 rounded-xl bg-[#0f0f1f] border border-[#2a2a50] w-64'/>
+          </div>
+          <div id='ch-grid' class='grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'></div>
+        </div>`;
+      const grid = $('#ch-grid');
+      const q = await getDocs(query(collection(db,'users'), orderBy('displayName'), limit(200)));
+      const channels = [];
+      q.forEach(d=> channels.push({id:d.id, ...d.data()}));
+      function render(list){
+        grid.innerHTML='';
+        if(!list.length){ grid.innerHTML = `<div class='muted'>Нічого не знайдено</div>`; return; }
+        list.forEach(u=> grid.appendChild(channelCard(u)));
+      }
+      function channelCard(u){
+        return html(`<a href='#channel/${u.uid||u.id}' class='card p-3 block hover:border-indigo-400'>
+          <div class='flex items-center gap-3'>
+            ${u.photoURL?`<img class='big-avatar' src='${u.photoURL}'>`:`<div class='big-avatar bg-[#0f0f1f]'></div>`}
+            <div>
+              <div class='font-semibold'>${esc(u.displayName||'Канал')}</div>
+              <div class='text-xs muted'>@${esc((u.email||'').split('@')[0]||'')}</div>
+            </div>
+          </div>
+        </a>`);
+      }
+      const input = $('#ch-q');
+      input.oninput = ()=>{
+        const s = input.value.trim().toLowerCase();
+        if(!s) return render(channels);
+        render(channels.filter(u=> (u.displayName||'').toLowerCase().includes(s) || (u.email||'').toLowerCase().includes(s)));
+      };
+      render(channels);
+    }
+
     async function renderSearch(){
       const url = new URL(location.href);
       const q = url.hash.split("?")[1] || "";
       const qparam = new URLSearchParams(q).get("q") || "";
-      appRoot.innerHTML = `<div class='max-w-[1100px] mx-auto p-4'><h2 class='text-xl font-bold mb-3'>Результати: ${esc(qparam)}</h2><div id='grid' class='grid gap-4 sm:grid-cols-2 lg:grid-cols-3'></div></div>`;
-      const grid = $("#grid");
-      if(!qparam){ grid.innerHTML = `<div class='muted'>Введіть запит у пошуку зверху</div>`; return; }
-      // simple client search
-      const snap = await getDocs(query(collection(db,"videos"), orderBy("createdAt","desc"), limit(200)));
-      const items = [];
-      snap.forEach(d=>{ const v=d.data(); v.id=d.id; const hay=(v.title+"\n"+(v.description||"")).toLowerCase(); if(hay.includes(qparam.toLowerCase())) items.push(v) });
-      if(!items.length){ grid.innerHTML = `<div class='muted'>Нічого не знайдено</div>`; return; }
-      items.forEach(v=> grid.appendChild(cardVideo(v)));
+      appRoot.innerHTML = `<div class='max-w-[1200px] mx-auto p-4'>
+        <h2 class='text-xl font-bold mb-3'>Результати: ${esc(qparam)}</h2>
+        <div class='grid lg:grid-cols-3 gap-6'>
+          <div class='lg:col-span-2'>
+            <h3 class='font-semibold mb-2'>Відео</h3>
+            <div id='v-grid' class='grid gap-4 sm:grid-cols-2'></div>
+          </div>
+          <div>
+            <h3 class='font-semibold mb-2'>Канали</h3>
+            <div id='u-grid' class='grid gap-3'></div>
+          </div>
+        </div>
+      </div>`;
+      const vgrid = $('#v-grid');
+      const ugrid = $('#u-grid');
+
+      if(!qparam){ vgrid.innerHTML = `<div class='muted'>Введіть запит у пошуку зверху</div>`; ugrid.innerHTML=''; return; }
+      // videos (client filter)
+      const vsnap = await getDocs(query(collection(db,'videos'), orderBy('createdAt','desc'), limit(200)));
+      const vids=[]; vsnap.forEach(d=>{ const v=d.data(); v.id=d.id; if((v.title+"\n"+(v.description||"")).toLowerCase().includes(qparam.toLowerCase())) vids.push(v) });
+      if(!vids.length) vgrid.innerHTML = `<div class='muted'>Нічого не знайдено</div>`; else vids.forEach(v=> vgrid.appendChild(cardVideo(v)));
+      // users (client filter)
+      const usnap = await getDocs(query(collection(db,'users'), orderBy('displayName'), limit(200)));
+      const users=[]; usnap.forEach(d=> users.push({id:d.id, ...d.data()}));
+      const filt = users.filter(u=> (u.displayName||'').toLowerCase().includes(qparam.toLowerCase()) || (u.email||'').toLowerCase().includes(qparam.toLowerCase()));
+      if(!filt.length) ugrid.innerHTML = `<div class='muted'>Нічого не знайдено</div>`; else filt.forEach(u=> ugrid.appendChild(html(`<a href='#channel/${u.uid||u.id}' class='card p-3 block hover:border-indigo-400'><div class='flex items-center gap-3'>${u.photoURL?`<img class='avatar' src='${u.photoURL}'>`:`<div class='avatar bg-[#0f0f1f]'></div>`}<div><div class='font-semibold'>${esc(u.displayName||'Канал')}</div><div class='text-xs muted'>@${esc((u.email||'').split('@')[0]||'')}</div></div></div></a>`)));
     }
 
     function renderNotFound(){ appRoot.innerHTML = `<div class='p-6'>Сторінку не знайдено</div>`; }
