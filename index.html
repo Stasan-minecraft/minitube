@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MiniTube</title>
+<style>
+/* Простий, чистий інтерфейс для MiniTube. */
+body {
+  margin: 0;
+  font-family: sans-serif;
+  background: #f7f7f7;
+}
+nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #202020;
+  color: #fff;
+  padding: 10px 20px;
+}
+nav a {
+  color: #fff;
+  text-decoration: none;
+  margin-right: 15px;
+  font-size: 14px;
+}
+nav a:hover {
+  text-decoration: underline;
+}
+nav .right {
+  display: flex;
+  align-items: center;
+}
+#content {
+  padding: 20px;
+}
+.video-card {
+  display: flex;
+  margin-bottom: 15px;
+  background: #fff;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  cursor: pointer;
+}
+.video-card img {
+  width: 160px;
+  height: 90px;
+  object-fit: cover;
+}
+.video-card .info {
+  padding: 10px;
+  flex: 1;
+}
+.video-card .info h3 {
+  margin: 0 0 5px;
+  font-size: 16px;
+  color: #111;
+}
+.video-card .info p {
+  margin: 2px 0;
+  font-size: 14px;
+  color: #555;
+}
+.hidden {
+  display: none;
+}
+.button {
+  padding: 10px 15px;
+  border: none;
+  border-radius: 4px;
+  background: #1976d2;
+  color: #fff;
+  cursor: pointer;
+  font-size: 14px;
+}
+.button:hover {
+  background: #155a9c;
+}
+input[type="file"] {
+  margin: 10px 0;
+}
+#video-list {
+  display: flex;
+  flex-direction: column;
+}
+.comment {
+  background: #fff;
+  padding: 10px;
+  margin-bottom: 10px;
+  border-radius: 6px;
+}
+.comment .meta {
+  font-size: 12px;
+  color: #777;
+}
+.comment .content {
+  font-size: 14px;
+  color: #333;
+  white-space: pre-wrap;
+}
+textarea {
+  width: 100%;
+  padding: 8px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  resize: vertical;
+  font-family: sans-serif;
+}
+</style>
+</head>
+<body>
+<nav>
+  <div class="left">
+    <a href="#home">Головна</a>
+    <a href="#upload" id="uploadLink" class="hidden">Завантажити</a>
+    <a href="#" id="myChannelLink" class="hidden">Мій канал</a>
+  </div>
+  <div class="right">
+    <span id="userDisplay"></span>
+    <button id="authButton" class="button">Увійти</button>
+  </div>
+</nav>
+<div id="content"></div>
+
+<script type="module">
+/*
+ * Основний клієнтський скрипт MiniTube. Все знаходиться в одному файлі для
+ * спрощення розгортання. Ви повинні замінити значення у firebaseConfig
+ * на власні параметри, отримані з консолі Firebase (App settings).
+ */
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js';
+import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js';
+import {
+  getFirestore,
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  addDoc,
+  setDoc,
+  updateDoc,
+  query,
+  where,
+  orderBy,
+  serverTimestamp,
+  limit,
+  increment
+} from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
+import { getStorage, ref, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js';
+
+// TODO: Замініть ці параметри на власні з Firebase Console → Project settings → General → Your apps
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_AUTH_DOMAIN",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_STORAGE_BUCKET",
+  appId: "YOUR_APP_ID"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const storage = getStorage(app);
+
+let currentUser = null;
+const content = document.getElementById('content');
+const authButton = document.getElementById('authButton');
+const userDisplay = document.getElementById('userDisplay');
+const uploadLink = document.getElementById('uploadLink');
+const myChannelLink = document.getElementById('myChannelLink');
+
+function signIn() {
+  const provider = new GoogleAuthProvider();
+  signInWithPopup(auth, provider).catch((error) => {
+    alert('Помилка входу: ' + error.message);
+  });
+}
+
+function signOutUser() {
+  signOut(auth).catch((error) => {
+    alert('Помилка виходу: ' + error.message);
+  });
+}
+
+authButton.addEventListener('click', () => {
+  if (currentUser) {
+    signOutUser();
+  } else {
+    signIn();
+  }
+});
+
+myChannelLink.addEventListener('click', (e) => {
+  e.preventDefault();
+  if (currentUser) {
+    window.location.hash = '#channel/' + currentUser.uid;
+  }
+});
+
+onAuthStateChanged(auth, async (user) => {
+  currentUser = user;
+  if (user) {
+    // Оновлення інтерфейсу при вході
+    userDisplay.textContent = user.displayName || user.email;
+    authButton.textContent = 'Вийти';
+    uploadLink.classList.remove('hidden');
+    myChannelLink.classList.remove('hidden');
+    // Оновлення даних користувача у Firestore
+    const userRef = doc(db, 'users', user.uid);
+    await setDoc(
+      userRef,
+      {
+        displayName: user.displayName || user.email,
+        photoURL: user.photoURL || '',
+        updatedAt: serverTimestamp()
+      },
+      { merge: true }
+    );
+  } else {
+    userDisplay.textContent = '';
+    authButton.textContent = 'Увійти';
+    uploadLink.classList.add('hidden');
+    myChannelLink.classList.add('hidden');
+  }
+  // Щойно статус автентифікації змінюється – виконуємо маршрутизацію
+  route();
+});
+
+window.addEventListener('hashchange', () => {
+  route();
+});
+
+/**
+ * Проста клієнтська маршрутизація на основі хеша URL.
+ */
+function route() {
+  const hash = window.location.hash || '#home';
+  if (hash.startsWith('#upload')) {
+    showUpload();
+  } else if (hash.startsWith('#video/')) {
+    const id = hash.split('/')[1];
+    showVideo(id);
+  } else if (hash.startsWith('#channel/')) {
+    const uid = hash.split('/')[1];
+    showChannel(uid);
+  } else {
+    showHome();
+  }
+}
+
+/**
+ * Відображає головну сторінку зі списком останніх відео.
+ */
+async function showHome() {
+  content.innerHTML = '<h2>Останні відео</h2><div id="video-list"></div>';
+  const listElem = document.getElementById('video-list');
+  try {
+    const q = query(collection(db, 'videos'), orderBy('createdAt', 'desc'), limit(50));
+    const snap = await getDocs(q);
+    listElem.innerHTML = '';
+    snap.forEach((docSnap) => {
+      const vid = docSnap.data();
+      listElem.appendChild(renderVideoCard(docSnap.id, vid));
+    });
+  } catch (err) {
+    listElem.innerHTML = '<p>Помилка завантаження відео.</p>';
+  }
+}
+
+/**
+ * Створює елемент картки для відео.
+ * @param {string} id ID документа відео
+ * @param {object} vid Дані відео
+ */
+function renderVideoCard(id, vid) {
+  const div = document.createElement('div');
+  div.className = 'video-card';
+  div.innerHTML = `
+    <img src="${vid.thumbURL}" alt="${vid.title}">
+    <div class="info">
+      <h3>${vid.title}</h3>
+      <p>Автор: <a href="#channel/${vid.ownerUid}">${vid.ownerName || 'Користувач'}</a></p>
+      <p>${vid.views || 0} переглядів</p>
+    </div>
+  `;
+  div.addEventListener('click', () => {
+    window.location.hash = '#video/' + id;
+  });
+  return div;
+}
+
+/**
+ * Показує сторінку завантаження відео. Доступна лише авторизованим.
+ */
+function showUpload() {
+  if (!currentUser) {
+    content.innerHTML = '<p>Будь ласка, увійдіть, щоб завантажити відео.</p>';
+    return;
+  }
+  content.innerHTML = `
+    <h2>Завантажити відео</h2>
+    <form id="uploadForm">
+      <label>Назва:</label><br>
+      <input type="text" id="videoTitle" required><br>
+      <label>Опис:</label><br>
+      <textarea id="videoDesc" rows="3"></textarea><br>
+      <label>Відеофайл (MP4/WebM):</label><br>
+      <input type="file" id="videoFile" accept="video/mp4,video/webm" required><br>
+      <canvas id="thumbCanvas" width="320" height="180" style="display:none;"></canvas>
+      <img id="thumbPreview" src="" alt="Прев’ю" style="max-width:320px; display:none; margin-top:10px;"><br>
+      <button type="submit" class="button">Завантажити</button>
+    </form>
+  `;
+  const fileInput = document.getElementById('videoFile');
+  const thumbCanvas = document.getElementById('thumbCanvas');
+  const thumbPreview = document.getElementById('thumbPreview');
+  let selectedFile;
+  fileInput.addEventListener('change', () => {
+    selectedFile = fileInput.files[0];
+    if (selectedFile) generateThumbnail(selectedFile, thumbCanvas, thumbPreview);
+  });
+  document.getElementById('uploadForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (!selectedFile) return;
+    uploadVideo(selectedFile, thumbCanvas);
+  });
+}
+
+/**
+ * Генерує прев’ю з відеофайлу, захоплюючи кадр на середині тривалості
+ * або на 2-й секунді, якщо відео довше 4 секунд.
+ * @param {File} file Відеофайл
+ * @param {HTMLCanvasElement} canvas Полотно для малювання
+ * @param {HTMLImageElement} previewElem Елемент для показу прев’ю
+ */
+function generateThumbnail(file, canvas, previewElem) {
+  const url = URL.createObjectURL(file);
+  const video = document.createElement('video');
+  video.preload = 'metadata';
+  video.src = url;
+  video.onloadedmetadata = () => {
+    // Вибираємо момент для прев’ю: середина відео або 2 секунди, якщо коротше
+    const seekTime = Math.min(2, video.duration * 0.5);
+    video.currentTime = seekTime;
+  };
+  video.onseeked = () => {
+    const ctx = canvas.getContext('2d');
+    canvas.width = 320;
+    canvas.height = 180;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const dataURL = canvas.toDataURL('image/jpeg');
+    previewElem.src = dataURL;
+    previewElem.style.display = 'block';
+    URL.revokeObjectURL(url);
+  };
+}
+
+/**
+ * Завантажує відео та прев’ю у Firebase Storage та додає запис до Firestore.
+ * @param {File} file Відеофайл
+ * @param {HTMLCanvasElement} canvas Полотно з прев’ю
+ */
+async function uploadVideo(file, canvas) {
+  if (!currentUser) return;
+  const title = document.getElementById('videoTitle').value.trim();
+  if (!title) {
+    alert('Введіть назву відео');
+    return;
+  }
+  const desc = document.getElementById('videoDesc').value.trim();
+  const timestamp = Date.now();
+  const videoPath = `videos/${currentUser.uid}/${timestamp}_${file.name}`;
+  const thumbPath = `thumbs/${currentUser.uid}/${timestamp}.jpg`;
+  const videoRef = ref(storage, videoPath);
+  const thumbRef = ref(storage, thumbPath);
+  try {
+    // Завантаження відео
+    await uploadBytes(videoRef, file);
+    const videoURL = await getDownloadURL(videoRef);
+    // Конвертуємо прев’ю у Blob та завантажуємо
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.8));
+    await uploadBytes(thumbRef, blob);
+    const thumbURL = await getDownloadURL(thumbRef);
+    // Додаємо запис до Firestore
+    const docRef = await addDoc(collection(db, 'videos'), {
+      title,
+      description: desc,
+      ownerUid: currentUser.uid,
+      ownerName: currentUser.displayName || currentUser.email,
+      videoPath,
+      videoURL,
+      thumbPath,
+      thumbURL,
+      views: 0,
+      createdAt: serverTimestamp()
+    });
+    // Переходимо на сторінку відео
+    window.location.hash = '#video/' + docRef.id;
+  } catch (err) {
+    alert('Помилка при завантаженні: ' + err.message);
+  }
+}
+
+/**
+ * Показує сторінку перегляду відео та секцію коментарів.
+ * @param {string} id ID відео
+ */
+async function showVideo(id) {
+  content.innerHTML = '<p>Завантаження...</p>';
+  try {
+    const docRef = doc(db, 'videos', id);
+    const snap = await getDoc(docRef);
+    if (!snap.exists()) {
+      content.innerHTML = '<p>Відео не знайдено.</p>';
+      return;
+    }
+    const vid = snap.data();
+    // Інкрементуємо перегляди
+    await updateDoc(docRef, { views: increment(1) });
+    // Відображаємо дані відео
+    content.innerHTML = `
+      <div>
+        <h2>${vid.title}</h2>
+        <video id="player" controls style="max-width:100%; background:#000;">
+          <source src="${vid.videoURL}" type="video/mp4">
+          <source src="${vid.videoURL}" type="video/webm">
+        </video>
+        <p>Автор: <a href="#channel/${vid.ownerUid}">${vid.ownerName || 'Користувач'}</a></p>
+        <p>${(vid.views || 0) + 1} переглядів</p>
+        <p>${vid.description || ''}</p>
+        <div id="commentsSection">
+          <h3>Коментарі</h3>
+          <div id="commentsList"></div>
+          <div id="commentFormContainer"></div>
+        </div>
+      </div>
+    `;
+    // Завантажуємо коментарі
+    loadComments(id);
+    // Показуємо форму коментаря тільки для авторизованих
+    if (currentUser) {
+      renderCommentForm(id);
+    } else {
+      document.getElementById('commentFormContainer').innerHTML = '<p>Увійдіть, щоб залишити коментар.</p>';
+    }
+  } catch (err) {
+    content.innerHTML = '<p>Помилка завантаження відео.</p>';
+  }
+}
+
+/**
+ * Завантажує та відображає список коментарів до відео.
+ * @param {string} videoId ID відео
+ */
+async function loadComments(videoId) {
+  const commentsList = document.getElementById('commentsList');
+  commentsList.innerHTML = '<p>Завантаження...</p>';
+  try {
+    const q = query(
+      collection(db, 'videos', videoId, 'comments'),
+      orderBy('createdAt', 'asc'),
+      limit(100)
+    );
+    const snap = await getDocs(q);
+    commentsList.innerHTML = '';
+    snap.forEach((docSnap) => {
+      const c = docSnap.data();
+      const div = document.createElement('div');
+      div.className = 'comment';
+      const dateStr = c.createdAt?.toDate().toLocaleString() || '';
+      div.innerHTML = `
+        <div class="meta">${c.userName || 'Користувач'} - ${dateStr}</div>
+        <div class="content">${escapeHtml(c.content)}</div>
+      `;
+      commentsList.appendChild(div);
+    });
+  } catch (err) {
+    commentsList.innerHTML = '<p>Помилка завантаження коментарів.</p>';
+  }
+}
+
+/**
+ * Відображає форму для додавання нового коментаря та обробляє його відправлення.
+ * @param {string} videoId ID відео
+ */
+function renderCommentForm(videoId) {
+  const container = document.getElementById('commentFormContainer');
+  container.innerHTML = `
+    <form id="commentForm">
+      <textarea id="commentText" rows="3" placeholder="Ваш коментар" required></textarea>
+      <button type="submit" class="button">Надіслати</button>
+    </form>
+  `;
+  document.getElementById('commentForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const text = document.getElementById('commentText').value.trim();
+    if (!text) return;
+    try {
+      await addDoc(collection(db, 'videos', videoId, 'comments'), {
+        userUid: currentUser.uid,
+        userName: currentUser.displayName || currentUser.email,
+        content: text,
+        createdAt: serverTimestamp()
+      });
+      document.getElementById('commentText').value = '';
+      loadComments(videoId);
+    } catch (err) {
+      alert('Помилка додавання коментаря: ' + err.message);
+    }
+  });
+}
+
+/**
+ * Відображає сторінку каналу та список відео певного користувача.
+ * @param {string} uid UID користувача
+ */
+async function showChannel(uid) {
+  content.innerHTML = '<p>Завантаження...</p>';
+  try {
+    const userSnap = await getDoc(doc(db, 'users', uid));
+    const userData = userSnap.exists() ? userSnap.data() : null;
+    const displayName = userData?.displayName || 'Користувач';
+    content.innerHTML = `
+      <h2>Канал: ${displayName}</h2>
+      <div id="channelVideos"></div>
+    `;
+    const vidsContainer = document.getElementById('channelVideos');
+    vidsContainer.innerHTML = '<p>Завантаження...</p>';
+    const q = query(
+      collection(db, 'videos'),
+      where('ownerUid', '==', uid),
+      orderBy('createdAt', 'desc'),
+      limit(50)
+    );
+    const snap = await getDocs(q);
+    vidsContainer.innerHTML = '';
+    if (snap.empty) {
+      vidsContainer.innerHTML = '<p>Немає відео.</p>';
+    } else {
+      snap.forEach((docSnap) => {
+        const vid = docSnap.data();
+        vidsContainer.appendChild(renderVideoCard(docSnap.id, vid));
+      });
+    }
+  } catch (err) {
+    content.innerHTML = '<p>Помилка завантаження каналу.</p>';
+  }
+}
+
+/**
+ * Екранування HTML, щоб запобігти XSS у коментарях.
+ * @param {string} text
+ * @returns {string}
+ */
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// Ініціалізуємо відображення при першому завантаженні сторінки
+route();
+
+</script>
+</body>
+</html>
